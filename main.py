@@ -1,9 +1,14 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
+import os
+from datetime import datetime
+import time
+import numpy as np
 import tensorflow as tf
 
 batch_size = 32
+max_step = 10000
 
 img_width = 224
 img_height = 224
@@ -14,6 +19,17 @@ label_holder = tf.placeholder(tf.float32, [batch_size])
 keep_prob = tf.placeholder(tf.float32)
 
 start_learning_rate = 1e-2
+decay_rate = 0.95
+decay_steps = 1000
+
+steps = '10000'
+param_dir = '../params/'
+save_filename = 'model'
+load_filename = 'model-' + steps
+checkpointer_iter = 2000
+
+log_dir = '../log/'
+summary_iter = 20000
 
 
 #Todo
@@ -32,6 +48,11 @@ def variable_with_weight_loss(shape, stddev, wl):
         tf.add_to_collection('losses', weight_loss)
     return var
 
+def _activation_summary(tensor):
+    name = tensor.op.name
+    tf.summary.histogram(name + '/activatins', tensor)
+    tf.summary.scalar(name + '/sparsity', tf.nn.zeros_fraction(tensor))
+
 def conv_layer(fm, channels):
     '''
     Arg fm: feather maps
@@ -45,7 +66,7 @@ def conv_layer(fm, channels):
     activation = tf.nn.relu(pre_activation)
 
     print_tensor(activation)
-
+    _activation_summary(activation)
 
     return activation
 
@@ -64,8 +85,10 @@ def fc_layer(input_op, fan_out):
     activation = tf.nn.relu(pre_activation)
 
     print_tensor(activation)
+    _activation_summary(tensor)
 
     return activation
+
 
 def inference(images, keep_prob):
     with tf.name_scope('conv1') as scope:
@@ -109,19 +132,105 @@ def inference(images, keep_prob):
         drop2 = tf.nn.dropout(fc2, keep_prob)
 
     with tf.name_scope('final_fc') as scope:
-        predictions = fc_layer(drop2, 21)
+        logits = fc_layer(drop2, 21)
 
-    print_tensor(predictions)
+    print_tensor(logits)
 
-    return predictions
+    return logits
+
+def loss(logits, labels):
+    labels = tf.cast(labels, tf.int64)
+
+    cross_entropy_sum = tf.nn.sparse_softmax_cross_entropy_with_logits(
+        labels=labels, logits=logits, name='cross_entropy_sum')
+    cross_entropy = tf.reduce_mean(cross_entropy_sum, name='cross_entropy')
+
+    tf.add_to_collection('losses', cross_entropy)
+
+    total_loss = tf.add_n(tf.get_collection('losses'), name='total_loss')
+
+    tf.summary.scalar(total_loss.op.name + ' (raw)', loss)
+
+    return total_loss
+
+
+def train_op(total_loss, global_step):
+    learning_rate = tf.train.exponential_decay(start_learning_rate, global_step, decay_steps, decay_rate, staircase=True)
+    train_op = tf.train.AdamOptimizer(learning_rate).minimize(total_loss, global_step)
 
 def main():
-    
+    global_step = tf.get_variable('global_step', initializer=0, 
+                        dtype=tf.int32, trainable=False)
+
+    logits = inference(image_holder, keep_prob)
+    loss = loss(logits, label_holder)
+    train_op = train_op(loss, global_step)
+
+    top_k_op = tf.nn.in_top_k(logits, label_holder, 1)
+
+    init = tf.global_variables_initializer()
+    saver = tf.train.Saver(max_to_keep=100)
+
     sess_config = tf.ConfigProto()
     sess_config.gpu_options.allow_growth = True
 
     with tf.Session(config=sess_config) as sess:
-        predictions = inference(image_holder, keep_prob)
+        sess.run(init)
+
+        merged = tf.summary.merge_all()
+        logdir = os.path.join(log_dir, datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
+        train_writer = tf.summary.FileWriter(logdir, sess.graph)
+
+        #start training
+        print 'start training'
+        for step in range(max_step):
+            #start_time = time.time()
+
+            with tf.device('/cpu:0'):
+                image_batch, label_batch = sess.run([images_train, labels_train])
+
+            feed_dict={
+                image_holder:image_batch,
+                label_holder:label_batch,
+                keep_prob:0.5
+            }
+
+            with tf.device('/gpu:0'):
+                _, loss_value = sess.run([train_op, loss], feed_dict=feed_dict)
+
+            if step%20 == 0:
+                print 'step %d, loss = ' % step, loss_value
+
+            with tf.device('/cpu:0'):
+                if (step+1)%checkpointer_iter == 0:
+                    saver.save(sess, param_dir+save_filename, global_step.eval())
+                
+                if (step+1)%summary_iter == 0:
+                    summary = sess.run(merged, feed_dict=feed_dict)
+                    train_writer.add_summary(summary, global_step.eval())
+
+            
+            #test
+            num_examples = NUM_EXAMPLES_PER_EPOCH_FOR_TEST
+            num_iter = int(math.ceil(num_examples/batch_size))
+            true_count = 0
+            total_sample_count = num_iter*batch_size
+            step = 0
+            while step < num_iter:
+                step += 1
+
+                with tf.device("/cpu:0"):
+                    image_batch, label_batch = sess.run([images_test, labels_test])
+
+                with tf.device("/gpu:0"):
+                    accuracy = sess.run([top_k_op], feed_dict=feed_dict)
+
+                true_count += np.sum(accuracy)
+
+                precision = 1.0*true_count / total_sample_count
+
+                print 'precision @ 1 = %.3f' % precision
+
 
 
 if __name__ == '__main__':
