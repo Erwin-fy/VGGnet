@@ -49,7 +49,7 @@ def main():
     loss = Model.loss(logits)
     train_op = Model.train_op(loss)
 
-    accuracy = Model.accuracy(logits)
+    top_k = Model.accuracy(logits)
 
     init = tf.global_variables_initializer()
     saver = tf.train.Saver(max_to_keep=100)
@@ -63,7 +63,7 @@ def main():
         
 
 
-    '''
+    
         merged = tf.summary.merge_all()
         logdir = os.path.join(config.log_dir, datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
         train_writer = tf.summary.FileWriter(logdir, sess.graph)
@@ -76,7 +76,7 @@ def main():
             with tf.device('/cpu:0'):
                 image_batch, label_batch = sess.run([images_train, labels_train])
 
-            feed_dict={
+            feed_dict = {
                 Model.image_holder:image_batch,
                 Model.label_holder:label_batch,
                 Model.keep_prob:0.5
@@ -89,19 +89,19 @@ def main():
                 print 'step %d, loss = ' % step, loss_value
 
             with tf.device('/cpu:0'):
-                if (step+1)%checkpointer_iter == 0:
-                    saver.save(sess, param_dir+save_filename, Model.global_step.eval())
+                if (step+1)%config.checkpointer_iter == 0:
+                    saver.save(sess, config.param_dir+config.save_filename, Model.global_step.eval())
                 
-                if (step+1)%summary_iter == 0:
+                if (step+1)%config.summary_iter == 0:
                     summary = sess.run(merged, feed_dict=feed_dict)
                     train_writer.add_summary(summary, Model.global_step.eval())
 
             
             #test
             num_examples = NUM_EXAMPLES_PER_EPOCH_FOR_TEST
-            num_iter = int(math.ceil(num_examples/batch_size))
+            num_iter = int(math.ceil(num_examples/config.batch_size))
             true_count = 0
-            total_sample_count = num_iter*batch_size
+            total_sample_count = num_iter*config.batch_size
             step = 0
             while step < num_iter:
                 step += 1
@@ -109,21 +109,21 @@ def main():
                 with tf.device("/cpu:0"):
                     image_batch, label_batch = sess.run([images_test, labels_test])
 
-                feed_dict={
+                feed_dict = {
                     Model.image_holder:image_batch,
                     Model.label_holder:label_batch,
                     Model.keep_prob:1.0
                 }
 
                 with tf.device("/gpu:0"):
-                    accuracy = sess.run([top_k_op], feed_dict=feed_dict)
+                    accuracy = sess.run([top_k], feed_dict=feed_dict)
 
                 true_count += np.sum(accuracy)
 
                 precision = 1.0*true_count / total_sample_count
 
                 print 'precision @ 1 = %.3f' % precision
-    '''
+    
 
 
 if __name__ == '__main__':
