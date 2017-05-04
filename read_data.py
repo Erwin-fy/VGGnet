@@ -45,6 +45,7 @@ class VGGReader():
                 begin = tmp[1]
                 self.records.append((filename, begin))
         self.size = len(self.records)
+        #print label_path, "count is :", self.size
 
 
     def random_batch(self):
@@ -64,6 +65,7 @@ class VGGReader():
 
         out_imgs = self._img_preprocess(np.stack(img_list))
         out_begins = np.stack(begins_list)
+        #print self.label_path, out_begins
         return out_imgs, out_begins, filename_list
 
 
@@ -99,7 +101,8 @@ class VGGReader():
         return out_imgs, out_begins, filename_list
 
     def _img_preprocess(self, imgs):
-        #imgs = tf.random_crop(imgs, [self.img_width, self.img_height, self.img_channel])
+        mean = np.mean(np.mean(np.mean(imgs, axis=0), axis=0), axis=0)
+        imgs = np.subtract(imgs, mean)
         if self.color_mode == 0:
             output = np.reshape(imgs, [-1, self.img_height, self.img_width, 1])
         elif self.color_mode == 1:
@@ -107,7 +110,7 @@ class VGGReader():
         else:
             raise Exception ("color_mode error.")
 
-        output = output.astype(np.float32) * (1. / 255) - 0.5
+        #output = output.astype(np.float32) * (1. / 255) - 0.5
         return output
 
 
@@ -184,8 +187,8 @@ class VGGReader():
         imgs, begins, filename_list = self.batch(
                 line_idx=line_idx)
         if distort:
-            imgs = self._batch_random_flip_lr(imgs, labels)
-            imgs = self._batch_random_roate(imgs, labels, self.degree)
+            imgs = self._batch_random_flip_lr(imgs)
+            imgs = self._batch_random_roate(imgs, self.degree)
 
         return (imgs.reshape([self.batch_size, self.img_height, self.img_width, self.img_channel]), begins, filename_list)
 

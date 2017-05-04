@@ -42,14 +42,15 @@ class VGG():
         tf.summary.histogram(name + '/activatins', tensor)
         tf.summary.scalar(name + '/sparsity', tf.nn.zero_fraction(tensor))
 
-    def conv_layer(self, fm, channels):
+    def conv_layer(self, fm, channels, scope):
         '''
         Arg fm: feather maps
         '''
         shape = fm.get_shape()
-        kernel = self.variable_with_weight_loss(shape=[3, 3, shape[-1].value, channels], stddev=1e-2, wl=0.0)
+        #kernel = self.variable_with_weight_loss(shape=[3, 3, shape[-1].value, channels], stddev=1e-2, wl=0.0)
+        kernel = tf.get_variable(scope + 'kernel', shape=[3, 3, shape[-1].value, channels], dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer_conv2d())
         conv = tf.nn.conv2d(fm, kernel, [1, 1, 1, 1], padding='SAME')
-        biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[channels]))
+        biases = tf.Variable(tf.constant(0.0, dtype=tf.float32, shape=[channels]))
         pre_activation = tf.nn.bias_add(conv, biases)
 
         activation = tf.nn.relu(pre_activation)
@@ -57,9 +58,12 @@ class VGG():
         self.print_tensor(activation)
         self._activation_summary(activation)
 
+
+        self.print_tensor(kernel)
+
         return activation
 
-    def fc_layer(self, input_op, fan_out):
+    def fc_layer(self, input_op, fan_out, scope):
         '''
         input_op: 输入tensor
         fan_in: 输入节点数
@@ -67,7 +71,8 @@ class VGG():
         '''
         fan_in = input_op.get_shape()[1].value
 
-        weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.004)
+        #weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.004)
+        weights = tf.get_variable(scope + 'weights', shape=[fan_in, fan_out], dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
         biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[fan_out]))
         pre_activation = tf.nn.bias_add(tf.matmul(input_op, weights), biases)
 
@@ -78,9 +83,10 @@ class VGG():
 
         return activation
 
-    def final_fc_layer(self, input_op, fan_out):
+    def final_fc_layer(self, input_op, fan_out, scope):
 	fan_in = input_op.get_shape()[1].value
-        weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.0)
+        #weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.0)
+        weights = tf.get_variable(scope + 'weights', shape=[fan_in, fan_out], dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
         biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[fan_out]))
         pre_activation = tf.nn.bias_add(tf.matmul(input_op, weights), biases)
 
@@ -92,31 +98,31 @@ class VGG():
 
     def inference(self):
         with tf.name_scope('conv1') as scope:
-            conv1_1 = self.conv_layer(self.image_holder, 64)
-            conv1_2 = self.conv_layer(conv1_1, 64)
+            conv1_1 = self.conv_layer(self.image_holder, 64, 'conv1_1')
+            conv1_2 = self.conv_layer(conv1_1, 64, 'conv1_2')
             pool1 = tf.nn.max_pool(conv1_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
 
         with tf.name_scope('conv2') as scope:
-            conv2_1 = self.conv_layer(pool1, 128)
-            conv2_2 = self.conv_layer(conv2_1, 128)
+            conv2_1 = self.conv_layer(pool1, 128, 'conv2_1')
+            conv2_2 = self.conv_layer(conv2_1, 128, 'conv2_2')
             pool2 = tf.nn.max_pool(conv2_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
 
         with tf.name_scope('conv3') as scope:
-            conv3_1 = self.conv_layer(pool2, 256)
-            conv3_2 = self.conv_layer(conv3_1, 256)
-            conv3_3 = self.conv_layer(conv3_2, 256)
+            conv3_1 = self.conv_layer(pool2, 256, 'conv3_1')
+            conv3_2 = self.conv_layer(conv3_1, 256, 'conv3_2')
+            conv3_3 = self.conv_layer(conv3_2, 256, 'conv3_3')
             pool3 = tf.nn.max_pool(conv3_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
         
         with tf.name_scope('conv4') as scope:
-            conv4_1 = self.conv_layer(pool3, 512)
-            conv4_2 = self.conv_layer(conv4_1, 512)
-            conv4_3 = self.conv_layer(conv4_2, 512)
+            conv4_1 = self.conv_layer(pool3, 512, 'conv4_1')
+            conv4_2 = self.conv_layer(conv4_1, 512, 'conv4_2')
+            conv4_3 = self.conv_layer(conv4_2, 512, 'conv4_3')
             pool4 = tf.nn.max_pool(conv4_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
 
         with tf.name_scope('conv5') as scope:
-            conv5_1 = self.conv_layer(pool4, 512)
-            conv5_2 = self.conv_layer(conv5_1, 512)
-            conv5_3 = self.conv_layer(conv5_2, 512)
+            conv5_1 = self.conv_layer(pool4, 512, 'conv5_1')
+            conv5_2 = self.conv_layer(conv5_1, 512, 'conv5_2')
+            conv5_3 = self.conv_layer(conv5_2, 512, 'conv5_3')
             pool5 = tf.nn.max_pool(conv5_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
             self.print_tensor(pool5)
 
@@ -124,15 +130,15 @@ class VGG():
         with tf.name_scope('fc1') as scope:
             reshape = tf.reshape(pool5, [self.batch_size, -1])
             self.print_tensor(reshape)
-            fc1 = self.fc_layer(reshape, 4096)
+            fc1 = self.fc_layer(reshape, 4096, 'fc1')
             drop1 = tf.nn.dropout(fc1, self.keep_prob)
 
         with tf.name_scope('fc2') as scope:
-            fc2 = self.fc_layer(drop1, 4096)
+            fc2 = self.fc_layer(drop1, 4096, 'fc2')
             drop2 = tf.nn.dropout(fc2, self.keep_prob)
 
         with tf.name_scope('final_fc') as scope:
-            logits = self.final_fc_layer(drop2, 20)
+            logits = self.final_fc_layer(drop2, 20, 'final_fc')
 
 
         return logits

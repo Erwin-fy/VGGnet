@@ -8,19 +8,20 @@ import numpy as np
 import tensorflow as tf
 import model
 import read_data
+import math
 
 
 class Config():
     batch_size = 32
-    max_step = 2000
+    max_step = 10000
 
     img_width = 224
     img_height = 224
     img_channel = 3
 
-    start_learning_rate = 1e-3
+    start_learning_rate = 1e-4
     decay_rate = 0.95
-    decay_steps = 1000
+    decay_steps = 200
 
     steps = '-1'
     param_dir = './params/'
@@ -32,7 +33,7 @@ class Config():
     summary_iter = 200
 
     degree = 10
-    val_size = 32
+    val_size = 2000
 
 def main():
     config = Config()
@@ -77,7 +78,7 @@ def main():
             with tf.device('/cpu:0'):
                 images_train, labels_train, train_filenames = train_reader.get_random_batch(False)
 	
-            #print train_filenames, labels_train
+            	#print train_filenames, labels_train
             
 
 	        feed_dict = {modeler.image_holder:images_train,
@@ -97,40 +98,34 @@ def main():
                     summary = sess.run(merged, feed_dict=feed_dict)
                     train_writer.add_summary(summary, modeler.global_step.eval())
 
-            
             #val
-
+            if (step % 100 == 0) and step:
 	        true_count = 0
-	        num_iter = config.val_size / config.batch_size
-
+	        num_iter = int(math.ceil(config.val_size / config.batch_size))
+                
 	        for i in range(num_iter):  
-                with tf.device('/cpu:0'):
-                    images_val, labels_val, val_filenames = val_reader.get_random_batch(False)              
-                #  with tf.device('/cpu:0'):
-                #     images_val, labels_val, val_filenames = val_reader.get_random_batch(False)
-		
+                    with tf.device('/cpu:0'):
+                        images_val, labels_val, val_filenames = val_reader.get_random_batch(False)              
 
            	    feed_dict = {
-                    modeler.image_holder : images_val,
-                    modeler.label_holder : labels_val,
-                    modeler.keep_prob : 1.0
+                        modeler.image_holder : images_val,
+                        modeler.label_holder : labels_val,
+                        modeler.keep_prob : 1.0
            	    }
 
            	    with tf.device("/gpu:0"):
-                    prediction, accuracy = sess.run((predictions,top_k_op), feed_dict=feed_dict)
+                        prediction, accuracy = sess.run((predictions,top_k_op), feed_dict=feed_dict)
 		
-		        #if step%10 == 0:
-		        #print images_val, labels_val, prediction, accuracy, '\n'
+		    #print labels_val, prediction, accuracy, '\n'
 
-            	true_count += np.sum(accuracy)
+                    true_count += np.sum(accuracy)
 
-            precision = 1.0*true_count / config.val_size
-
-            
-	        if step%10 == 0:
-		        print modeler.global_step.eval()
-                print 'step %d, loss = ' % step, loss_value
+                precision = 1.0*true_count / config.val_size
                 print 'precision @ 1 = %.3f' % precision
+            
+	    if step%10 == 0:
+		#print modeler.global_step.eval()
+                print 'step %d, loss = ' % step, loss_value
 
 
 def test():
