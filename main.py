@@ -24,8 +24,8 @@ class Config():
 
     steps = '-1'
     param_dir = './params/'
-    save_filename = 'model'
-    load_filename = 'model-' + steps
+    save_filename = 'modeler'
+    load_filename = 'modeler-' + steps
     checkpointer_iter = 2000
 
     log_dir = './log/'
@@ -37,7 +37,7 @@ class Config():
 def main():
     config = Config()
 
-    Model = model.VGG(config)
+    modeler = model.VGG(config)
     
     # read data to train("data/train")
     train_reader = read_data.VGGReader("./labels/train_labels.txt", "./data/images", config)
@@ -45,12 +45,12 @@ def main():
     #read data to val("data/val")
     val_reader = read_data.VGGReader("./labels/val_labels.txt", "./data/images", config)
 
-    logits = Model.inference()
-    loss = Model.loss(logits)
-    train_op = Model.train_op(loss)
+    logits = modeler.inference()
+    loss = modeler.loss(logits)
+    train_op = modeler.train_op(loss)
 
     predictions = tf.nn.softmax(logits)
-    top_k_op = Model.top_k_op(logits)
+    top_k_op = modeler.top_k_op(logits)
 
     init = tf.global_variables_initializer()
     saver = tf.train.Saver(max_to_keep=100)
@@ -75,15 +75,14 @@ def main():
             #start_time = time.time()
 
             with tf.device('/cpu:0'):
-    		images_train, labels_train, train_filenames = train_reader.get_random_batch(False)
+                images_train, labels_train, train_filenames = train_reader.get_random_batch(False)
 	
             #print train_filenames, labels_train
             
 
-	    feed_dict = {
-                Model.image_holder:images_train,
-                Model.label_holder:labels_train,
-                Model.keep_prob:0.5
+	        feed_dict = {modeler.image_holder:images_train,
+                modeler.label_holder:labels_train,
+                modeler.keep_prob:0.5
             }
 
             with tf.device('/gpu:0'):
@@ -92,41 +91,44 @@ def main():
 
             with tf.device('/cpu:0'):
                 if (step+1)%config.checkpointer_iter == 0:
-                    saver.save(sess, config.param_dir+config.save_filename, Model.global_step.eval())
+                    saver.save(sess, config.param_dir+config.save_filename, modeler.global_step.eval())
                 
                 if (step+1)%config.summary_iter == 0:
                     summary = sess.run(merged, feed_dict=feed_dict)
-                    train_writer.add_summary(summary, Model.global_step.eval())
+                    train_writer.add_summary(summary, modeler.global_step.eval())
 
             
             #val
 
-	    true_count = 0
-	    num_iter = config.val_size / config.batch_size
-	    for i in range(num_iter):
-            	with tf.device("/cpu:0"):
-    		    images_val, labels_val, val_filenames = val_reader.get_random_batch(False)
+	        true_count = 0
+	        num_iter = config.val_size / config.batch_size
+
+	        for i in range(num_iter):  
+                with tf.device('/cpu:0'):
+                    images_val, labels_val, val_filenames = val_reader.get_random_batch(False)              
+                #  with tf.device('/cpu:0'):
+                #     images_val, labels_val, val_filenames = val_reader.get_random_batch(False)
 		
 
-           	feed_dict = {
-                    Model.image_holder : images_val,
-                    Model.label_holder : labels_val,
-                    Model.keep_prob : 1.0
-           	}
+           	    feed_dict = {
+                    modeler.image_holder : images_val,
+                    modeler.label_holder : labels_val,
+                    modeler.keep_prob : 1.0
+           	    }
 
-           	with tf.device("/gpu:0"):
+           	    with tf.device("/gpu:0"):
                     prediction, accuracy = sess.run((predictions,top_k_op), feed_dict=feed_dict)
 		
-		#if step%10 == 0:
-		    #print images_val, labels_val, prediction, accuracy, '\n'
+		        #if step%10 == 0:
+		        #print images_val, labels_val, prediction, accuracy, '\n'
 
             	true_count += np.sum(accuracy)
 
             precision = 1.0*true_count / config.val_size
 
             
-	    if step%10 == 0:
-		print Model.global_step.eval()
+	        if step%10 == 0:
+		        print modeler.global_step.eval()
                 print 'step %d, loss = ' % step, loss_value
                 print 'precision @ 1 = %.3f' % precision
 
