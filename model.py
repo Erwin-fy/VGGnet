@@ -67,7 +67,7 @@ class VGG():
         '''
         fan_in = input_op.get_shape()[1].value
 
-        weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.04)
+        weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.004)
         biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[fan_out]))
         pre_activation = tf.nn.bias_add(tf.matmul(input_op, weights), biases)
 
@@ -78,6 +78,17 @@ class VGG():
 
         return activation
 
+    def final_fc_layer(self, input_op, fan_out):
+	fan_in = input_op.get_shape()[1].value
+        weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.0)
+        biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[fan_out]))
+        pre_activation = tf.nn.bias_add(tf.matmul(input_op, weights), biases)
+
+        self.print_tensor(pre_activation)
+        self._activation_summary(pre_activation)
+
+        return pre_activation
+  
 
     def inference(self):
         with tf.name_scope('conv1') as scope:
@@ -113,7 +124,7 @@ class VGG():
         with tf.name_scope('fc1') as scope:
             reshape = tf.reshape(pool5, [self.batch_size, -1])
             self.print_tensor(reshape)
-            fc1 = self. fc_layer(reshape, 4096)
+            fc1 = self.fc_layer(reshape, 4096)
             drop1 = tf.nn.dropout(fc1, self.keep_prob)
 
         with tf.name_scope('fc2') as scope:
@@ -121,9 +132,8 @@ class VGG():
             drop2 = tf.nn.dropout(fc2, self.keep_prob)
 
         with tf.name_scope('final_fc') as scope:
-            logits = self.fc_layer(drop2, 20)
+            logits = self.final_fc_layer(drop2, 20)
 
-        self.print_tensor(logits)
 
         return logits
 
@@ -145,7 +155,9 @@ class VGG():
 
     def train_op(self, total_loss):
         learning_rate = tf.train.exponential_decay(self.start_learning_rate, self.global_step, self.decay_steps, self.decay_rate, staircase=True)
-        train_op = tf.train.AdamOptimizer(learning_rate).minimize(total_loss, self.global_step)
+        train_op = tf.train.AdamOptimizer(learning_rate).minimize(total_loss, global_step=self.global_step)
 
-    def accuracy(self, logits):
+	return train_op
+
+    def top_k_op(self, logits):
         return tf.nn.in_top_k(logits, self.label_holder, 1)
