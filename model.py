@@ -25,6 +25,7 @@ class VGG():
                                 [self.batch_size, self.img_width, self.img_height, self.img_channel])
         self.label_holder = tf.placeholder(tf.int32, [self.batch_size])
         self.keep_prob = tf.placeholder(tf.float32)
+        self.is_train = tf.placeholder(tf.bool)
 
 
     def print_tensor(self, tensor):
@@ -68,27 +69,47 @@ class VGG():
         input_op: 输入tensor
         fan_in: 输入节点数
         fan_out： 输出节点数
+        is_train: True --- fc   Flase --- conv
         '''
-        fan_in = input_op.get_shape()[1].value
-
-        weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.004)
-        #weights = tf.get_variable(scope + 'weights', shape=[fan_in, fan_out], dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
         biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[fan_out]))
-        pre_activation = tf.nn.bias_add(tf.matmul(input_op, weights), biases)
+
+        if is_train:
+            fan_in = input_op.get_shape()[1].value
+            #weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.004)
+            weights = tf.get_variable(scope + 'weights', shape=[fan_in, fan_out], 
+                dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+            
+            pre_activation = tf.nn.bias_add(tf.matmul(input_op, weights), biases)
+        else:
+            shape = input_op.get_shape()
+            weights = tf.get_variable(scope + 'weights', 
+                    shape=[shape[0].value, shape[1].value, shape[2].value, shape[3].value, fan_out], 
+                    dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+            conv = tf.nn.conv2d(input_op, weights, [1, 1, 1, 1], padding='VALID')
+            pre_activation = tf.nn.bias_add(conv, biases)
 
         activation = tf.nn.relu(pre_activation)
-
         self.print_tensor(activation)
         self._activation_summary(activation)
-
         return activation
 
     def final_fc_layer(self, input_op, fan_out, scope):
-	fan_in = input_op.get_shape()[1].value
-        weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1.0/4096, wl=0.0)
-        #weights = tf.get_variable(scope + 'weights', shape=[fan_in, fan_out], dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
         biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[fan_out]))
-        pre_activation = tf.nn.bias_add(tf.matmul(input_op, weights), biases)
+
+        if is_train:
+            fan_in = input_op.get_shape()[1].value
+            #weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.0)
+            weights = tf.get_variable(scope + 'weights', shape=[fan_in, fan_out], 
+                dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+        
+            pre_activation = tf.nn.bias_add(tf.matmul(input_op, weights), biases)
+        else:
+            shape = input_op.get_shape()
+            weights = tf.get_variable(scope + 'weights', 
+                    shape=[shape[0].value, shape[1].value, shape[2].value, shape[3].value, fan_out], 
+                    dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+            conv = tf.nn.conv2d(input_op, weights, [1, 1, 1, 1], padding='VALID')
+            pre_activation = tf.nn.bias_add(conv, biases)
 
         self.print_tensor(pre_activation)
         self._activation_summary(pre_activation)
@@ -96,7 +117,7 @@ class VGG():
         return pre_activation
   
 
-    def inference(self):
+    def inference(self, is_train):
         with tf.name_scope('conv1') as scope:
             conv1_1 = self.conv_layer(self.image_holder, 64, 'conv1_1')
             conv1_2 = self.conv_layer(conv1_1, 64, 'conv1_2')
@@ -139,7 +160,6 @@ class VGG():
 
         with tf.name_scope('final_fc') as scope:
             logits = self.final_fc_layer(drop2, 20, 'final_fc')
-
 
         return logits
 

@@ -81,9 +81,11 @@ def main():
             	#print train_filenames, labels_train
             
 
-	        feed_dict = {modeler.image_holder:images_train,
+	        feed_dict = {
+                modeler.image_holder:images_train,
                 modeler.label_holder:labels_train,
-                modeler.keep_prob:0.5
+                modeler.keep_prob:0.5,
+                modeler.is_train: True
             }
 
             with tf.device('/gpu:0'):
@@ -108,9 +110,10 @@ def main():
                         images_val, labels_val, val_filenames = val_reader.get_random_batch(False)              
 
            	    feed_dict = {
-                        modeler.image_holder : images_val,
-                        modeler.label_holder : labels_val,
-                        modeler.keep_prob : 1.0
+                        modeler.image_holder: images_val,
+                        modeler.label_holder: labels_val,
+                        modeler.keep_prob: 1.0,
+                        modeler.is_train: False
            	    }
 
            	    with tf.device("/gpu:0"):
