@@ -62,10 +62,7 @@ def main():
    
     with tf.Session(config=sess_config) as sess:
         sess.run(init)
-        
-
-
-    
+         
         merged = tf.summary.merge_all()
         logdir = os.path.join(config.log_dir, datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
         train_writer = tf.summary.FileWriter(logdir, sess.graph)
@@ -82,11 +79,11 @@ def main():
             
 
 	        feed_dict = {
-                modeler.image_holder:images_train,
-                modeler.label_holder:labels_train,
-                modeler.keep_prob:0.5,
-                modeler.is_train: True
-            }
+                    modeler.image_holder:images_train,
+                    modeler.label_holder:labels_train,
+                    modeler.keep_prob:0.5,
+                    modeler.is_train: True
+                }
 
             with tf.device('/gpu:0'):
                 _, loss_value = sess.run([train_op, loss], feed_dict=feed_dict)
@@ -133,7 +130,6 @@ def main():
 
 def test():
     pass
-	#logits = 
 
 
 if __name__ == '__main__':

@@ -117,7 +117,7 @@ class VGG():
         return pre_activation
   
 
-    def inference(self, is_train):
+    def inference(self):
         with tf.name_scope('conv1') as scope:
             conv1_1 = self.conv_layer(self.image_holder, 64, 'conv1_1')
             conv1_2 = self.conv_layer(conv1_1, 64, 'conv1_2')
