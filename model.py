@@ -47,8 +47,8 @@ class VGG():
         Arg fm: feather maps
         '''
         shape = fm.get_shape()
-        #kernel = self.variable_with_weight_loss(shape=[3, 3, shape[-1].value, channels], stddev=1e-2, wl=0.0)
-        kernel = tf.get_variable(scope + 'kernel', shape=[3, 3, shape[-1].value, channels], dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer_conv2d())
+        kernel = self.variable_with_weight_loss(shape=[3, 3, shape[-1].value, channels], stddev=1e-2, wl=0.0)
+        #kernel = tf.get_variable(scope + 'kernel', shape=[3, 3, shape[-1].value, channels], dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer_conv2d())
         conv = tf.nn.conv2d(fm, kernel, [1, 1, 1, 1], padding='SAME')
         biases = tf.Variable(tf.constant(0.0, dtype=tf.float32, shape=[channels]))
         pre_activation = tf.nn.bias_add(conv, biases)
@@ -71,8 +71,8 @@ class VGG():
         '''
         fan_in = input_op.get_shape()[1].value
 
-        #weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.004)
-        weights = tf.get_variable(scope + 'weights', shape=[fan_in, fan_out], dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+        weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.004)
+        #weights = tf.get_variable(scope + 'weights', shape=[fan_in, fan_out], dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
         biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[fan_out]))
         pre_activation = tf.nn.bias_add(tf.matmul(input_op, weights), biases)
 
@@ -85,8 +85,8 @@ class VGG():
 
     def final_fc_layer(self, input_op, fan_out, scope):
 	fan_in = input_op.get_shape()[1].value
-        #weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.0)
-        weights = tf.get_variable(scope + 'weights', shape=[fan_in, fan_out], dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+        weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1.0/4096, wl=0.0)
+        #weights = tf.get_variable(scope + 'weights', shape=[fan_in, fan_out], dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
         biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[fan_out]))
         pre_activation = tf.nn.bias_add(tf.matmul(input_op, weights), biases)
 
@@ -162,8 +162,7 @@ class VGG():
     def train_op(self, total_loss):
         learning_rate = tf.train.exponential_decay(self.start_learning_rate, self.global_step, self.decay_steps, self.decay_rate, staircase=True)
         train_op = tf.train.AdamOptimizer(learning_rate).minimize(total_loss, global_step=self.global_step)
-
-	return train_op
+        return train_op
 
     def top_k_op(self, logits):
         return tf.nn.in_top_k(logits, self.label_holder, 1)

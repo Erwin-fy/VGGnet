@@ -12,7 +12,7 @@ import math
 
 
 class Config():
-    batch_size = 32
+    batch_size = 50
     max_step = 10000
 
     img_width = 224
@@ -99,7 +99,7 @@ def main():
                     train_writer.add_summary(summary, modeler.global_step.eval())
 
             #val
-            if (step % 100 == 0) and step:
+            if (step % 50 == 0) and step:
 	        true_count = 0
 	        num_iter = int(math.ceil(config.val_size / config.batch_size))
                 

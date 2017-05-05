@@ -23,12 +23,13 @@ class VGGReader():
         self.degree = config.degree
         self.record_len = 2
 	self.line_idx = 0
-
+        self.mean = [101.9337, 110.3372, 116.2642] 
         if (self.img_channel == 3) :
             self.color_mode = 1
         else:
             self.color_mode = 0
-
+        
+        #all_img_list = list()
         with open(label_path, 'rb') as fr:
             for line in fr:
                 tmp = re.split('  ', line.strip())
@@ -37,14 +38,16 @@ class VGGReader():
                     print "Length Error: ", len(tmp)
                     sys.exit(0)
                 filename = tmp[0]
-		# check the image size
-                #img = cv2.imread(os.path.join(self.data_path, filename), self.color_mode)
-		#sp = img.shape
-		#if (sp[0] < self.img_height or sp[1] < self.img_width)
-		#    continue
                 begin = tmp[1]
                 self.records.append((filename, begin))
         self.size = len(self.records)
+                
+                #img = cv2.imread(os.path.join(self.data_path, filename), self.color_mode)
+                #img = cv2.resize(img, (self.img_width, self.img_height))
+                #all_img_list.append(img)
+        #imgs = np.stack(all_img_list)
+        #self.mean = np.mean(np.mean(np.mean(imgs, axis=0), axis=0), axis=0)
+        #print "The mean is: ", self.mean
         #print label_path, "count is :", self.size
 
 
@@ -62,7 +65,8 @@ class VGGReader():
                     self.color_mode)
             img = cv2.resize(img, (self.img_width, self.img_height))
             img_list.append(img)
-
+            #print filename
+        #print np.stack(img_list)
         out_imgs = self._img_preprocess(np.stack(img_list))
         out_begins = np.stack(begins_list)
         #print self.label_path, out_begins
@@ -101,8 +105,8 @@ class VGGReader():
         return out_imgs, out_begins, filename_list
 
     def _img_preprocess(self, imgs):
-        mean = np.mean(np.mean(np.mean(imgs, axis=0), axis=0), axis=0)
-        imgs = np.subtract(imgs, mean)
+        imgs = np.subtract(imgs, self.mean)
+        #print imgs
         if self.color_mode == 0:
             output = np.reshape(imgs, [-1, self.img_height, self.img_width, 1])
         elif self.color_mode == 1:
