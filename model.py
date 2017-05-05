@@ -73,8 +73,9 @@ class VGG():
         '''
         biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[fan_out]))
 
-        if self.is_train:
-            fan_in = input_op.get_shape()[1].value
+        if self.is_train == True:
+            reshape = tf.reshape(input_op, [self.batch_size, -1])
+            fan_in = reshape.get_shape()[1].value
             #weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.004)
             weights = tf.get_variable(scope + 'weights', shape=[fan_in, fan_out], 
                 dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
@@ -83,7 +84,7 @@ class VGG():
         else:
             shape = input_op.get_shape()
             weights = tf.get_variable(scope + 'weights', 
-                    shape=[shape[0].value, shape[1].value, shape[2].value, shape[3].value, fan_out], 
+                    shape=[shape[1].value, shape[2].value, shape[3].value, fan_out], 
                     dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
             conv = tf.nn.conv2d(input_op, weights, [1, 1, 1, 1], padding='VALID')
             pre_activation = tf.nn.bias_add(conv, biases)
@@ -96,8 +97,9 @@ class VGG():
     def final_fc_layer(self, input_op, fan_out, scope):
         biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[fan_out]))
 
-        if self.is_train:
-            fan_in = input_op.get_shape()[1].value
+        if self.is_train == True:
+            reshape = tf.reshape(input_op, [self.batch_size, -1])
+            fan_in = reshape.get_shape()[1].value
             #weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.0)
             weights = tf.get_variable(scope + 'weights', shape=[fan_in, fan_out], 
                 dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
@@ -106,7 +108,7 @@ class VGG():
         else:
             shape = input_op.get_shape()
             weights = tf.get_variable(scope + 'weights', 
-                    shape=[shape[0].value, shape[1].value, shape[2].value, shape[3].value, fan_out], 
+                    shape=[shape[1].value, shape[2].value, shape[3].value, fan_out], 
                     dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
             conv = tf.nn.conv2d(input_op, weights, [1, 1, 1, 1], padding='VALID')
             pre_activation = tf.nn.bias_add(conv, biases)
@@ -149,9 +151,7 @@ class VGG():
 
 
         with tf.name_scope('fc1') as scope:
-            reshape = tf.reshape(pool5, [self.batch_size, -1])
-            self.print_tensor(reshape)
-            fc1 = self.fc_layer(reshape, 4096, 'fc1')
+            fc1 = self.fc_layer(pool5, 4096, 'fc1')
             drop1 = tf.nn.dropout(fc1, self.keep_prob)
 
         with tf.name_scope('fc2') as scope:
@@ -161,7 +161,7 @@ class VGG():
         with tf.name_scope('final_fc') as scope:
             logits = self.final_fc_layer(drop2, 20, 'final_fc')
 
-        return logits
+        return tf.reduce_mean(logits, axis=[1,2])
 
     def loss(self, logits):
         labels = tf.cast(self.label_holder, tf.int64)
