@@ -73,7 +73,7 @@ class VGG():
         '''
         biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[fan_out]))
 
-        if is_train:
+        if self.is_train:
             fan_in = input_op.get_shape()[1].value
             #weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.004)
             weights = tf.get_variable(scope + 'weights', shape=[fan_in, fan_out], 
@@ -96,7 +96,7 @@ class VGG():
     def final_fc_layer(self, input_op, fan_out, scope):
         biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[fan_out]))
 
-        if is_train:
+        if self.is_train:
             fan_in = input_op.get_shape()[1].value
             #weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.0)
             weights = tf.get_variable(scope + 'weights', shape=[fan_in, fan_out], 
