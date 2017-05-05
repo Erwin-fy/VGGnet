@@ -63,7 +63,9 @@ class VGGReader():
         for filename in filename_list:
             img = cv2.imread(os.path.join(self.data_path, filename),
                     self.color_mode)
-            img = cv2.resize(img, (self.img_width, self.img_height))
+            #img = cv2.resize(img, (self.img_width, self.img_height))
+            img = self.generate_img(img)
+            
             img_list.append(img)
             #print filename
         #print np.stack(img_list)
@@ -96,13 +98,21 @@ class VGGReader():
         for filename in filename_list:
             img = cv2.imread(os.path.join(self.data_path, filename),
                     self.color_mode)
-            img = cv2.resize(img, (self.img_width, self.img_height))
+            img = self.generate_img(img)
             img_list.append(img)
 
         out_imgs = self._img_preprocess(np.stack(img_list))
         out_begins = np.stack(begins_list)
 
         return out_imgs, out_begins, filename_list
+    
+    def generate_img(self, img):
+        scale = random.uniform(256, 512)
+        img = cv2.resize(img, (scale, scale))
+        row_begin = random.uniform(0, scale - self.img_height)
+        col_begin = random.uniform(0, scale - self.img_width)
+        return  img[row_begin: (self.img_width + row_begin), col_begin: (col_begin + self.img_height)]
+
 
     def _img_preprocess(self, imgs):
         imgs = np.subtract(imgs, self.mean)
