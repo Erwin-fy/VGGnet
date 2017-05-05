@@ -112,8 +112,9 @@ def main():
            	    }
 
            	    with tf.device("/gpu:0"):
-                        prediction, accuracy = sess.run((predictions,top_k_op), feed_dict=feed_dict)
-		
+                        #prediction, accuracy = sess.run((predictions,top_k_op), feed_dict=feed_dict)
+		            accuracy = sess.run([top_k_op]), feed_dict=feed_dict)
+
 		    #print labels_val, prediction, accuracy, '\n'
 
                     true_count += np.sum(accuracy)

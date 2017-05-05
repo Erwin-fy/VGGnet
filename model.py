@@ -42,58 +42,61 @@ class VGG():
         tf.summary.histogram(name + '/activatins', tensor)
         tf.summary.scalar(name + '/sparsity', tf.nn.zero_fraction(tensor))
 
-    def conv_layer(self, fm, channels, scope):
+    def conv_layer(self, fm, channels, name):
         '''
         Arg fm: feather maps
         '''
-        shape = fm.get_shape()
-        #kernel = self.variable_with_weight_loss(shape=[3, 3, shape[-1].value, channels], stddev=1e-2, wl=0.0)
-        kernel = tf.get_variable(scope + 'kernel', shape=[3, 3, shape[-1].value, channels], dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer_conv2d())
-        conv = tf.nn.conv2d(fm, kernel, [1, 1, 1, 1], padding='SAME')
-        biases = tf.Variable(tf.constant(0.0, dtype=tf.float32, shape=[channels]))
-        pre_activation = tf.nn.bias_add(conv, biases)
+        with tf.name_scope(name) as scope:
+            shape = fm.get_shape()
+            #kernel = self.variable_with_weight_loss(shape=[3, 3, shape[-1].value, channels], stddev=1e-2, wl=0.0)
+            kernel = tf.get_variable(scope + 'kernel', shape=[3, 3, shape[-1].value, channels], 
+                dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer_conv2d())
+            conv = tf.nn.conv2d(fm, kernel, [1, 1, 1, 1], padding='SAME')
+            biases = tf.Variable(tf.constant(0.0, dtype=tf.float32, shape=[channels]))
+            pre_activation = tf.nn.bias_add(conv, biases)
 
-        activation = tf.nn.relu(pre_activation)
+            activation = tf.nn.relu(pre_activation)
 
-        self.print_tensor(activation)
-        self._activation_summary(activation)
+            self.print_tensor(activation)
+            self._activation_summary(activation)
 
-        return activation
+            return activation
 
-    def fc_layer(self, input_op, fan_out, scope):
+    def fc_layer(self, input_op, fan_out, name):
         '''
         input_op: 输入tensor
         fan_in: 输入节点数
         fan_out： 输出节点数
         is_train: True --- fc   Flase --- conv
         '''
-        
-        reshape = tf.reshape(input_op, [self.batch_size, -1])
-        fan_in = reshape.get_shape()[1].value
-        #weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.004)
-        weights = tf.get_variable(scope + 'weights', shape=[fan_in, fan_out], 
-            dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
-        biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[fan_out]))
-        pre_activation = tf.nn.bias_add(tf.matmul(input_op, weights), biases)
-        activation = tf.nn.relu(pre_activation)
+        with tf.name_scope(name) as scope:
+            reshape = tf.reshape(input_op, [self.batch_size, -1])
+            fan_in = reshape.get_shape()[1].value
+            #weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.004)
+            weights = tf.get_variable(scope + 'weights', shape=[fan_in, fan_out], 
+                dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+            biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[fan_out]))
+            pre_activation = tf.nn.bias_add(tf.matmul(input_op, weights), biases)
+            activation = tf.nn.relu(pre_activation)
 
-        self.print_tensor(activation)
-        self._activation_summary(activation)
-        return activation
+            self.print_tensor(activation)
+            self._activation_summary(activation)
+            return activation
 
-    def final_fc_layer(self, input_op, fan_out, scope):
-        reshape = tf.reshape(input_op, [self.batch_size, -1])
-        fan_in = reshape.get_shape()[1].value
-        #weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.0)
-        weights = tf.get_variable(scope + 'weights', shape=[fan_in, fan_out], 
-            dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
-        biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[fan_out]))
-        pre_activation = tf.nn.bias_add(tf.matmul(input_op, weights), biases)
+    def final_fc_layer(self, input_op, fan_out, name):
+        with tf.name_scope(name) as scope:
+            reshape = tf.reshape(input_op, [self.batch_size, -1])
+            fan_in = reshape.get_shape()[1].value
+            #weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.0)
+            weights = tf.get_variable(scope + 'weights', shape=[fan_in, fan_out], 
+                dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+            biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[fan_out]))
+            pre_activation = tf.nn.bias_add(tf.matmul(input_op, weights), biases)
 
-        self.print_tensor(pre_activation)
-        self._activation_summary(pre_activation)
+            self.print_tensor(pre_activation)
+            self._activation_summary(pre_activation)
 
-        return pre_activation
+            return pre_activation
   
 
     def inference(self):
@@ -136,18 +139,26 @@ class VGG():
             drop2 = tf.nn.dropout(fc2, self.keep_prob)
 
         with tf.name_scope('final_fc') as scope:
-            logits = self.final_fc_layer(drop2, 20, 'final_fc')
+            fc3 = self.final_fc_layer(drop2, 20, 'final_fc')
+
+        logits = tf.nn.softmax(fc3)
 
         return logits
 
     def loss(self, logits):
+        '''
         labels = tf.cast(self.label_holder, tf.int64)
         cross_entropy_sum = tf.nn.sparse_softmax_cross_entropy_with_logits(
             labels=labels, logits=logits, name='cross_entropy_sum')
         cross_entropy = tf.reduce_mean(cross_entropy_sum, name='cross_entropy')
-
+        '''
         
-        tf.add_to_collection('losses', cross_entropy)
+        #softmax loss
+        labels = tf.one_hot(self.label_holder, 20, on_value=self.label_holder)
+        softmax_loss_sum = -tf.reduce_sum(tf.log(tf.multiply(logits, labels)), axis=1)
+        softmax_loss = tf.reduce_mean(softmax_loss_sum, name='softmax_loss')
+        
+        tf.add_to_collection('losses', softmax_loss)
         total_loss = tf.add_n(tf.get_collection('losses'), name='total_loss')
 
 
