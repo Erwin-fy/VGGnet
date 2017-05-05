@@ -20,12 +20,10 @@ class VGG():
         self.decay_rate = config.decay_rate
         self.decay_steps = config.decay_steps
 
-
         self.image_holder = tf.placeholder(tf.float32,
                                 [self.batch_size, self.img_width, self.img_height, self.img_channel])
         self.label_holder = tf.placeholder(tf.int32, [self.batch_size])
         self.keep_prob = tf.placeholder(tf.float32)
-        self.is_train = tf.placeholder(tf.bool)
 
 
     def print_tensor(self, tensor):
@@ -64,7 +62,7 @@ class VGG():
 
         return activation
 
-    def fc_layer(self, input_op, fan_out, scope):
+    def fc_layer(self, input_op, fan_out, is_train, scope):
         '''
         input_op: 输入tensor
         fan_in: 输入节点数
@@ -73,7 +71,7 @@ class VGG():
         '''
         biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[fan_out]))
 
-        if self.is_train == True:
+        if is_train:
             reshape = tf.reshape(input_op, [self.batch_size, -1])
             fan_in = reshape.get_shape()[1].value
             #weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.004)
@@ -94,10 +92,10 @@ class VGG():
         self._activation_summary(activation)
         return activation
 
-    def final_fc_layer(self, input_op, fan_out, scope):
+    def final_fc_layer(self, input_op, fan_out, is_train, scope):
         biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[fan_out]))
 
-        if self.is_train == True:
+        if is_train:
             reshape = tf.reshape(input_op, [self.batch_size, -1])
             fan_in = reshape.get_shape()[1].value
             #weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.0)
@@ -119,7 +117,7 @@ class VGG():
         return pre_activation
   
 
-    def inference(self):
+    def inference(self, is_train):
         with tf.name_scope('conv1') as scope:
             conv1_1 = self.conv_layer(self.image_holder, 64, 'conv1_1')
             conv1_2 = self.conv_layer(conv1_1, 64, 'conv1_2')
@@ -151,15 +149,15 @@ class VGG():
 
 
         with tf.name_scope('fc1') as scope:
-            fc1 = self.fc_layer(pool5, 4096, 'fc1')
+            fc1 = self.fc_layer(pool5, 4096, is_train, 'fc1')
             drop1 = tf.nn.dropout(fc1, self.keep_prob)
 
         with tf.name_scope('fc2') as scope:
-            fc2 = self.fc_layer(drop1, 4096, 'fc2')
+            fc2 = self.fc_layer(drop1, 4096, is_train, 'fc2')
             drop2 = tf.nn.dropout(fc2, self.keep_prob)
 
         with tf.name_scope('final_fc') as scope:
-            logits = self.final_fc_layer(drop2, 20, 'final_fc')
+            logits = self.final_fc_layer(drop2, 20, is_train, 'final_fc')
 
         return tf.reduce_mean(logits, axis=[1,2])
 

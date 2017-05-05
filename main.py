@@ -12,7 +12,7 @@ import math
 
 
 class Config():
-    batch_size = 50
+    batch_size = 32
     max_step = 10000
 
     img_width = 224
@@ -46,12 +46,12 @@ def main():
     #read data to val("data/val")
     val_reader = read_data.VGGReader("./labels/val_labels.txt", "./data/images", config)
 
-    logits = modeler.inference()
+    logits = modeler.inference(True)
     loss = modeler.loss(logits)
     train_op = modeler.train_op(loss)
 
-    predictions = tf.nn.softmax(logits)
-    top_k_op = modeler.top_k_op(logits)
+    predictions = modeler.inference(False)
+    top_k_op = modeler.top_k_op(predictions)
 
     init = tf.global_variables_initializer()
     saver = tf.train.Saver(max_to_keep=100)
@@ -62,7 +62,8 @@ def main():
    
     with tf.Session(config=sess_config) as sess:
         sess.run(init)
-         
+        
+    
         merged = tf.summary.merge_all()
         logdir = os.path.join(config.log_dir, datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
         train_writer = tf.summary.FileWriter(logdir, sess.graph)
@@ -78,12 +79,10 @@ def main():
             	#print train_filenames, labels_train
             
 
-	        feed_dict = {
-                    modeler.image_holder:images_train,
-                    modeler.label_holder:labels_train,
-                    modeler.keep_prob:0.5,
-                    modeler.is_train: True
-                }
+	        feed_dict = {modeler.image_holder:images_train,
+                modeler.label_holder:labels_train,
+                modeler.keep_prob:0.5
+            }
 
             with tf.device('/gpu:0'):
                 _, loss_value = sess.run([train_op, loss], feed_dict=feed_dict)
@@ -98,7 +97,7 @@ def main():
                     train_writer.add_summary(summary, modeler.global_step.eval())
 
             #val
-            if (step % 50 == 0) and step:
+            if (step % 100 == 0) and step:
 	        true_count = 0
 	        num_iter = int(math.ceil(config.val_size / config.batch_size))
                 
@@ -107,10 +106,9 @@ def main():
                         images_val, labels_val, val_filenames = val_reader.get_random_batch(False)              
 
            	    feed_dict = {
-                        modeler.image_holder: images_val,
-                        modeler.label_holder: labels_val,
-                        modeler.keep_prob: 1.0,
-                        modeler.is_train: False
+                        modeler.image_holder : images_val,
+                        modeler.label_holder : labels_val,
+                        modeler.keep_prob : 1.0
            	    }
 
            	    with tf.device("/gpu:0"):
@@ -130,6 +128,7 @@ def main():
 
 def test():
     pass
+	#logits = 
 
 
 if __name__ == '__main__':
