@@ -46,12 +46,12 @@ def main():
     #read data to val("data/val")
     val_reader = read_data.VGGReader("./labels/val_labels.txt", "./data/images", config)
 
-    logits = modeler.inference(True)
+    logits = modeler.inference()
     loss = modeler.loss(logits)
     train_op = modeler.train_op(loss)
 
-    predictions = modeler.inference(False)
-    top_k_op = modeler.top_k_op(predictions)
+    predictions = tf.nn.softmax(logits)
+    top_k_op = modeler.top_k_op(logits)
 
     init = tf.global_variables_initializer()
     saver = tf.train.Saver(max_to_keep=100)
