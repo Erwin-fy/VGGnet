@@ -11,17 +11,19 @@ class VGG():
                         dtype=tf.int32, trainable=False)
 
         self.batch_size = config.batch_size
-    
-        self.img_width = config.img_width
-        self.img_height = config.img_height
-        self.img_channel = config.img_channel
 
-        self.start_learning_rate = config.start_learning_rate
-        self.decay_rate = config.decay_rate
-        self.decay_steps = config.decay_steps
+        self.img_width = 224
+        self.img_height = 224
+        self.img_channel = 3
 
-        self.vgg_npy_path = config.vgg_npy_path
+        self.start_learning_rate = 1e-4
+        self.decay_rate = 0.95
+        self.decay_steps = 200
 
+        self.vgg_npy_path = './vgg16.npy'
+        self.data_dict = np.load(self.vgg_npy_path, encoding='latin1').item()
+
+        self.wl = 5e-4
 
         self.image_holder = tf.placeholder(tf.float32,
                                 [self.batch_size, self.img_width, self.img_height, self.img_channel])
@@ -54,8 +56,7 @@ class VGG():
             #kernel = tf.get_variable(scope + 'kernel', shape=[3, 3, shape[-1].value, channels], 
             #    dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer_conv2d())
             kernel = self.get_conv_kernel(scope)
-            biases = self.get_bias(scope, channels)
-            
+            biases = self.get_bias(scope)
             conv = tf.nn.conv2d(fm, kernel, [1, 1, 1, 1], padding='SAME')
             pre_activation = tf.nn.bias_add(conv, biases)
 
@@ -99,7 +100,7 @@ class VGG():
             #    dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
             
             weights = self.get_fc_weight(scope)
-            biases = self.get_bias(scope, fan_out)
+            biases = self.get_bias(scope)
             pre_activation = tf.nn.bias_add(tf.matmul(reshape, weights), biases)
 
             self.print_tensor(pre_activation)
@@ -134,13 +135,13 @@ class VGG():
         self.print_tensor(pool5)
 
 
-        fc1 = self.fc_layer(pool5, 4096, 'fc1')
-        drop1 = tf.nn.dropout(fc1, self.keep_prob)
+        fc6 = self.fc_layer(pool5, 4096, 'fc6')
+        drop1 = tf.nn.dropout(fc6, self.keep_prob)
 
-        fc2 = self.fc_layer(drop1, 4096, 'fc2')
-        drop2 = tf.nn.dropout(fc2, self.keep_prob)
+        fc7 = self.fc_layer(drop1, 4096, 'fc7')
+        drop2 = tf.nn.dropout(fc7, self.keep_prob)
 
-        logits = self.final_fc_layer(drop2, 20, 'final_fc')
+        logits = self.final_fc_layer(drop2, 20, 'fc8')
 
 
         return logits
@@ -187,24 +188,27 @@ class VGG():
 
 
     def get_conv_kernel(self, name):
-        init = tf.constant_initializer(value=self.data_dict[name][0],
-                                      dtype=tf.float32)
+        init = tf.constant_initializer(value=self.data_dict[name][0],dtype=tf.float32)
         shape = self.data_dict[name][0].shape
-        var = tf.get_variable(name='kernel', initializer=init, shape=shape)
+        var = tf.get_variable(name='kernel', shape=shape, initializer=init)
         weight_decay = tf.multiply(tf.nn.l2_loss(var), self.wl, name='weight_loss')
-        tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, weight_decay)
+        tf.add_to_collection("losses", weight_decay)
 
         return var
 
     def get_fc_weight(self, name):
         init = tf.constant_initializer(value=self.data_dict[name][0], dtype=tf.float32)
         shape = self.data_dict[name][0].shape
-        var = tf.get_variable(name='kernel', initializer=init, shape=shape)
+        var = tf.get_variable(name='kernel', shape=shape, initializer=init)
         weight_decay = tf.multiply(tf.nn.l2_loss(var), self.wl, name='weight_loss')
-        tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, weight_decay)
+        tf.add_to_collection("losses", weight_decay)
 
         return var
 
 
-    def gte_bias(self, name, channels):
-        biases = self.data_dict[name][1]
+    def get_bias(self, name):
+        init = tf.constant_initializer(value=self.data_dict[name][1], dtype=tf.float32)
+        shape = self.data_dict[name][1]
+        biases = tf.get_variable(name='biases', shape=shape, initializer=init)
+        return biases
+
