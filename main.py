@@ -12,14 +12,14 @@ import math
 
 
 class Config():
-    batch_size = 32
-    max_step = 10000
+    batch_size = 6
+    max_step = 2000
 
     img_width = 224
     img_height = 224
     img_channel = 3
 
-    start_learning_rate = 1e-4
+    start_learning_rate = 1e-3
     decay_rate = 0.95
     decay_steps = 200
 
@@ -30,10 +30,12 @@ class Config():
     checkpointer_iter = 2000
 
     log_dir = './log/'
-    summary_iter = 200
+    summary_iter = 100
 
     degree = 10
     val_size = 2000
+
+    vgg_npy_path = ''
 
 def main():
     config = Config()
@@ -46,11 +48,11 @@ def main():
     #read data to val("data/val")
     val_reader = read_data.VGGReader("./labels/val_labels.txt", "./data/images", config)
 
-    logits = modeler.inference()
+    logits, images = modeler.inference()
     loss = modeler.loss(logits)
     train_op = modeler.train_op(loss)
 
-    predictions = tf.nn.softmax(logits)
+    predictions = modeler.predictions(logits)
     top_k_op = modeler.top_k_op(logits)
 
     init = tf.global_variables_initializer()
@@ -75,16 +77,16 @@ def main():
 
             with tf.device('/cpu:0'):
                 images_train, labels_train, train_filenames = train_reader.get_random_batch(False)
-	
-            	#print train_filenames, labels_train
-            
 
-	        feed_dict = {modeler.image_holder:images_train,
+	    feed_dict = {
+                modeler.image_holder:images_train,
                 modeler.label_holder:labels_train,
                 modeler.keep_prob:0.5
             }
 
             with tf.device('/gpu:0'):
+
+                #_, loss_value, predict, logit = sess.run([train_op, loss, predictions, logits], feed_dict=feed_dict)
                 _, loss_value = sess.run([train_op, loss], feed_dict=feed_dict)
 
 
@@ -95,7 +97,8 @@ def main():
                 if (step+1)%config.summary_iter == 0:
                     summary = sess.run(merged, feed_dict=feed_dict)
                     train_writer.add_summary(summary, modeler.global_step.eval())
-
+            
+            '''
             #val
             if (step % 100 == 0) and step:
 	        true_count = 0
@@ -106,26 +109,59 @@ def main():
                         images_val, labels_val, val_filenames = val_reader.get_random_batch(False)              
 
            	    feed_dict = {
-                        modeler.image_holder : images_val,
-                        modeler.label_holder : labels_val,
-                        modeler.keep_prob : 1.0
+                        modeler.image_holder:images_val,
+                        modeler.label_holder:labels_val,
+                        modeler.keep_prob:1.0
            	    }
 
            	    with tf.device("/gpu:0"):
-                        #prediction, accuracy = sess.run((predictions,top_k_op), feed_dict=feed_dict)
-		            accuracy = sess.run([top_k_op]), feed_dict=feed_dict)
+                        #accuracy = sess.run([top_k_op], feed_dict=feed_dict)
+                        accuracy, prediction, logit = sess.run([top_k_op, predictions, logits], feed_dict=feed_dict)
 
 		    #print labels_val, prediction, accuracy, '\n'
 
                     true_count += np.sum(accuracy)
+                    #print prediction
+                    print logit, prediction
 
                 precision = 1.0*true_count / config.val_size
                 print 'precision @ 1 = %.3f' % precision
+            '''
             
 	    if step%10 == 0:
 		#print modeler.global_step.eval()
-                print 'step %d, loss = ' % step, loss_value
+                print 'step %d, loss = %.3f' % (step, loss_value)
+                #print logit, predict
 
+
+        
+            
+        #val
+	true_count = 0
+	num_iter = int(math.ceil(config.val_size / config.batch_size))
+                
+	for i in range(num_iter):  
+            with tf.device('/cpu:0'):
+                images_val, labels_val, val_filenames = val_reader.get_random_batch(False)              
+
+            feed_dict = {
+                modeler.image_holder:images_val,
+                modeler.label_holder:labels_val,
+                modeler.keep_prob:1.0
+            }
+
+            with tf.device("/gpu:0"):
+                #accuracy = sess.run([top_k_op], feed_dict=feed_dict)
+                accuracy, prediction, logit = sess.run([top_k_op, predictions, logits], feed_dict=feed_dict)
+
+
+            true_count += np.sum(accuracy)
+            #print prediction
+            #print logit, prediction
+
+        precision = 1.0*true_count / config.val_size
+        print 'precision @ 1 = %.3f' % precision
+            
 
 def test():
     pass
