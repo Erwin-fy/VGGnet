@@ -93,16 +93,13 @@ class VGG():
 
     def final_fc_layer(self, input_op, fan_out, name):
         with tf.variable_scope(name) as scope:
-            fan_in = input_op.get_shape()[1].value
-            #weights = tf.get_variable(name + 'weights', shape=[fan_in, fan_out], 
-            #    dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
-            
+            fan_in = input_op.get_shape()[1].value            
             #weights = self.get_fc_weight(name)
-            #biases = self.get_bias(name)
-
-            weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=self.wl)
-            biases = tf.Variable(tf.constant(0.1, shape=[fan_out], dtype=tf.float32), name='biases')
+            #weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=self.wl)
             
+            weights = self.get_fc_weight_reshape(name, [fan_in, 1000], num_classes=20)
+            biases = self.get_bias_reshape(name, num_new=20)
+
             pre_activation = tf.nn.bias_add(tf.matmul(input_op, weights), biases)
 
             self.print_tensor(pre_activation)
@@ -226,4 +223,48 @@ class VGG():
         biases = tf.get_variable(name='biases', shape=shape, initializer=init)
         print name+'/biases', shape
         return biases
+    
+    def get_fc_weight_reshape(self, name, shape, num_classes=None):
+        print('Layer name: %s' % name)
+        print('Layer shape: %s' % shape)
+        weights = self.data_dict[name][0]
+        weights = weights.reshape(shape)
+        if num_classes is not None:
+            weights = self._summary_reshape(weights, shape,
+                                            num_new=num_classes)
+        init = tf.constant_initializer(value=weights,
+                                       dtype=tf.float32)
+        var = tf.get_variable(name="weights", initializer=init, shape=shape)
+        return var
 
+    def get_bias_reshape(self, name, num_new):
+        biases = self.data_dict[name][1]
+        shape = self.data_dict[name][1].shape
+
+        num_orig = shape[0]
+        n_averaged_elements = num_orig//num_new
+        avg_biases = np.zeros(num_new)
+        for i in range(0, num_orig, n_averaged_elements):
+            start_idx = i
+            end_idx = start_idx + n_averaged_elements
+            avg_idx = start_idx//n_averaged_elements
+            if avg_idx == num_new:
+                break
+            avg_biases[avg_idx] = np.mean(biases[start_idx:end_idx])
+        return avg_biases
+
+    def _summary_reshape(self, fweight, shape, num_new):
+        num_orig = shape[3]
+        shape[3] = num_new
+        assert(num_new < num_orig)
+        n_averaged_elements = num_orig//num_new
+        avg_fweight = np.zeros(shape)
+        for i in range(0, num_orig, n_averaged_elements):
+            start_idx = i
+            end_idx = start_idx + n_averaged_elements
+            avg_idx = start_idx//n_averaged_elements
+            if avg_idx == num_new:
+                break
+            avg_fweight[:, :, :, avg_idx] = np.mean(
+                fweight[:, :, :, start_idx:end_idx], axis=3)
+        return avg_fweight
