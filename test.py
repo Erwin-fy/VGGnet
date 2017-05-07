@@ -34,18 +34,18 @@ weights7 = tf.Variable(tf.constant_initializer(data_dict['fc7'][0], dtype=tf.flo
 biases7 = tf.Variable(tf.constant_initializer(data_dict['fc7'][1]))
 print weights7.get_shape().as_list()
 print biases7.get_shape().as_list()
-
-weights8 = tf.Variable(tf.constant_initializer(data_dict['fc8'][0]))
-biases8 = tf.Variable(tf.constant_initializer(data_dict['fc8'][1]))
-print weights8.get_shape().as_list()
-print biases8.get_shape().as_list()
 '''
 
+shape = data_dict['fc8'][1].shape
+biases8 = tf.get_variable(name='bi', shape=shape, initializer=tf.constant_initializer(data_dict['fc8'][1]))
+print biases8.get_shape().as_list()
+print data_dict['fc7'][0]
+'''
 print data_dict['conv4_3'][0].shape
 print data_dict['conv4_3'][1].shape
 
 print data_dict['fc6'][0].shape
-print data_dict['fc6'][1].shape
+print data_dict['fc6'][1].shape[0]
 
 
 print data_dict['fc7'][0].shape
@@ -53,3 +53,6 @@ print data_dict['fc7'][1].shape
 print data_dict['fc8'][0].shape
 print data_dict['fc8'][1].shape
 
+ss = np.reshape(data_dict['fc6'][1], 4096)
+print ss.shap
+'''

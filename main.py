@@ -16,17 +16,22 @@ class Config():
         self.batch_size = 32
         self.max_step = 10000
 
+        self.img_width = 224
+        self.img_height = 224
+        self.img_channel = 3
+
         self.steps = '-1'
         self.param_dir = './params/'
         self.save_filename = 'modeler'
-        self.load_filename = 'modeler-' + steps
+        self.load_filename = 'modeler-' + self.steps
         self.checkpointer_iter = 2000
 
         self.log_dir = './log/'
         self.summary_iter = 200
 
         self.degree = 10
-        self.val_size = 2000
+        self.val_size = 1000
+        self.test_size = 8400
 
 def main():
     config = Config()
@@ -43,7 +48,7 @@ def main():
     loss = modeler.loss(logits)
     train_op = modeler.train_op(loss)
 
-    predictions = tf.nn.softmax(logits)
+    #predictions = tf.nn.softmax(logits)
     top_k_op = modeler.top_k_op(logits)
 
     init = tf.global_variables_initializer()
@@ -72,7 +77,8 @@ def main():
             	#print train_filenames, labels_train
             
 
-	        feed_dict = {modeler.image_holder:images_train,
+	    feed_dict = {
+                modeler.image_holder:images_train,
                 modeler.label_holder:labels_train,
                 modeler.keep_prob:0.5
             }
@@ -88,7 +94,7 @@ def main():
                 if (step+1)%config.summary_iter == 0:
                     summary = sess.run(merged, feed_dict=feed_dict)
                     train_writer.add_summary(summary, modeler.global_step.eval())
-
+            '''
             #val
             if (step % 100 == 0) and step:
 	        true_count = 0
@@ -99,26 +105,47 @@ def main():
                         images_val, labels_val, val_filenames = val_reader.get_random_batch(False)              
 
            	    feed_dict = {
-                        modeler.image_holder : images_val,
-                        modeler.label_holder : labels_val,
-                        modeler.keep_prob : 1.0
+                        modeler.image_holder:images_val,
+                        modeler.label_holder:labels_val,
+                        modeler.keep_prob:1.0
            	    }
 
            	    with tf.device("/gpu:0"):
-                        prediction, accuracy = sess.run((predictions,top_k_op), feed_dict=feed_dict)
+                        accuracy = sess.run([top_k_op], feed_dict=feed_dict)
+                        #prediction, accuracy = sess.run((predictions,top_k_op), feed_dict=feed_dict)
 		
-		    #print labels_val, prediction, accuracy, '\n'
+		    #print labels_val, accuracy, '\n'
 
                     true_count += np.sum(accuracy)
 
                 precision = 1.0*true_count / config.val_size
                 print 'precision @ 1 = %.3f' % precision
-            
+            '''
 	    if step%10 == 0:
 		#print modeler.global_step.eval()
-                print 'step %d, loss = ' % step, loss_value
+                print 'step %d, loss = %.3f' % (step, loss_value)
 
 
+        #testing
+	true_count = 0
+	num_iter = int(math.ceil(config.test_size / config.batch_size))
+	for i in range(num_iter):  
+            with tf.device('/cpu:0'):
+                images_val, labels_val, val_filenames = val_reader.get_random_batch(False)              
+            feed_dict = {
+                modeler.image_holder:images_val,
+                modeler.label_holder:labels_val,
+                modeler.keep_prob:1.0
+            }
+
+            with tf.device("/gpu:0"):
+                accuracy = sess.run([top_k_op], feed_dict=feed_dict)
+		
+
+            true_count += np.sum(accuracy)
+
+        precision = 1.0*true_count / config.test_size
+        print 'precision @ 1 = %.3f' % precision
 
 
 if __name__ == '__main__':
