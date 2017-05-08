@@ -241,112 +241,111 @@ def _summary_reshape(fweight, shape, num_new):
             fweight[:, start_idx:end_idx], axis=1)
     return avg_fweight
 
-def main():
-    config = Config()
+config = Config()
+
+# read data to train("data/train")
+train_reader = read_data.VGGReader("./labels/train_labels.txt", "./data/images", config)
+
+#read data to val("data/val")
+val_reader = read_data.VGGReader("./labels/train_labels.txt", "./data/images", config)
+
+logits = inference(image_holder, keep_prob)
+loss = loss(logits, label_holder)
+train_op = train_op(loss)
+
+#predictions = tf.nn.softmax(logits)
+top_k_op = tf.nn.in_top_k(logits, label_holder, 1)
+
+init = tf.global_variables_initializer()
+saver = tf.train.Saver(max_to_keep=100)
+
+sess_config = tf.ConfigProto()
+sess_config.gpu_options.allow_growth = True
+
+
+with tf.Session(config=sess_config) as sess:
+    sess.run(init)
     
-    # read data to train("data/train")
-    train_reader = read_data.VGGReader("./labels/train_labels.txt", "./data/images", config)
-    
-    #read data to val("data/val")
-    val_reader = read_data.VGGReader("./labels/train_labels.txt", "./data/images", config)
+    merged = tf.summary.merge_all()
+    logdir = os.path.join(config.log_dir, datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
+    train_writer = tf.summary.FileWriter(logdir, sess.graph)
 
-    logits = inference(image_holder, keep_prob)
-    loss = loss(logits, label_holder)
-    train_op = train_op(loss)
+    #start training
+    print 'start training'
+    for step in range(config.max_step):
+        #start_time = time.time()
 
-    #predictions = tf.nn.softmax(logits)
-    top_k_op = tf.nn.in_top_k(logits, label_holder, 1)
+        with tf.device('/cpu:0'):
+            images_train, labels_train, train_filenames = train_reader.get_random_batch(False)
 
-    init = tf.global_variables_initializer()
-    saver = tf.train.Saver(max_to_keep=100)
-
-    sess_config = tf.ConfigProto()
-    sess_config.gpu_options.allow_growth = True
-
-   
-    with tf.Session(config=sess_config) as sess:
-        sess.run(init)
+            #print train_filenames, labels_train
         
-        merged = tf.summary.merge_all()
-        logdir = os.path.join(config.log_dir, datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
-        train_writer = tf.summary.FileWriter(logdir, sess.graph)
 
-        #start training
-        print 'start training'
-        for step in range(config.max_step):
-            #start_time = time.time()
+        feed_dict = {
+            image_holder:images_train,
+            label_holder:labels_train,
+            keep_prob:0.5
+        }
 
-            with tf.device('/cpu:0'):
-                images_train, labels_train, train_filenames = train_reader.get_random_batch(False)
-	
-            	#print train_filenames, labels_train
+        with tf.device('/gpu:0'):
+            _, loss_value = sess.run([train_op, loss], feed_dict=feed_dict)
+
+
+        with tf.device('/cpu:0'):
+            if (step+1)%config.checkpointer_iter == 0:
+                saver.save(sess, config.param_dir+config.save_filename, global_step.eval())
             
-
-	        feed_dict = {
-                image_holder:images_train,
-                label_holder:labels_train,
-                keep_prob:0.5
-            }
-
-            with tf.device('/gpu:0'):
-                _, loss_value = sess.run([train_op, loss], feed_dict=feed_dict)
-
-
-            with tf.device('/cpu:0'):
-                if (step+1)%config.checkpointer_iter == 0:
-                    saver.save(sess, config.param_dir+config.save_filename, global_step.eval())
-                
-                if (step+1)%config.summary_iter == 0:
-                    summary = sess.run(merged, feed_dict=feed_dict)
-                    train_writer.add_summary(summary, global_step.eval())
+            if (step+1)%config.summary_iter == 0:
+                summary = sess.run(merged, feed_dict=feed_dict)
+                train_writer.add_summary(summary, global_step.eval())
+        
+        #val
+        if (step % 100 == 0) and step:
+        true_count = 0
+        num_iter = int(math.ceil(config.val_size / config.batch_size))
             
-            #val
-            if (step % 100 == 0) and step:
-	        true_count = 0
-	        num_iter = int(math.ceil(config.val_size / config.batch_size))
-                
-	        for i in range(num_iter):
-                    with tf.device('/cpu:0'):
-                        images_val, labels_val, val_filenames = val_reader.get_random_batch(False)              
+        for i in range(num_iter):
+                with tf.device('/cpu:0'):
+                    images_val, labels_val, val_filenames = val_reader.get_random_batch(False)              
 
-
-           	    with tf.device("/gpu:0"):
-                        accuracy = sess.run([top_k_op], feed_dict={
-                            image_holder:images_val,
-                            label_holder:labels_val,
-                            keep_prob:1.0
-                        })
-		
-                    true_count += np.sum(accuracy)
-
-                precision = 1.0*true_count / config.val_size
-                print 'precision @ 1 = %.3f' % precision
-            
-	    if step%10 == 0:
-                print 'step %d, loss = %.3f' % (step, loss_value)
-
-
-        #testing
-	true_count = 0
-	num_iter = int(math.ceil(config.test_size / config.batch_size))
-	for i in range(num_iter):  
-            with tf.device('/cpu:0'):
-                images_val, labels_val, val_filenames = val_reader.get_random_batch(False)
 
             with tf.device("/gpu:0"):
-                accuracy = sess.run([top_k_op], feed_dict={
-                    image_holder:images_val,
-                    label_holder:labels_val,
-                    keep_prob:1.0
-                })
+                    accuracy = sess.run([top_k_op], feed_dict={
+                        image_holder:images_val,
+                        label_holder:labels_val,
+                        keep_prob:1.0
+                    })
+    
+                true_count += np.sum(accuracy)
 
-            true_count += np.sum(accuracy)
+            precision = 1.0*true_count / config.val_size
+            print 'precision @ 1 = %.3f' % precision
+        
+    if step%10 == 0:
+            print 'step %d, loss = %.3f' % (step, loss_value)
 
-        precision = 1.0*true_count / config.test_size
-        print 'precision @ 1 = %.3f' % precision
 
+    #testing
+true_count = 0
+num_iter = int(math.ceil(config.test_size / config.batch_size))
+for i in range(num_iter):  
+        with tf.device('/cpu:0'):
+            images_val, labels_val, val_filenames = val_reader.get_random_batch(False)
 
+        with tf.device("/gpu:0"):
+            accuracy = sess.run([top_k_op], feed_dict={
+                image_holder:images_val,
+                label_holder:labels_val,
+                keep_prob:1.0
+            })
+
+        true_count += np.sum(accuracy)
+
+    precision = 1.0*true_count / config.test_size
+    print 'precision @ 1 = %.3f' % precision
+
+'''
 if __name__ == '__main__':
     main()
-
+'''
 
