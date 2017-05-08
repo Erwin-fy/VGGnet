@@ -16,31 +16,36 @@ class Config():
     max_step = 10000
 
     img_width = 224
-        img_height = 224
-        img_channel = 3
+    img_height = 224
+    img_channel = 3
 
-        steps = '-1'
-        param_dir = './params/'
-        save_filename = 'modeler'
-        load_filename = 'modeler-' + config.steps
-        checkpointer_iter = 2000
+    steps = '-1'
+    param_dir = './params/'
+    save_filename = 'modeler'
+    load_filename = 'modeler-' + config.steps
+    checkpointer_iter = 2000
 
-        log_dir = './log/'
-        summary_iter = 200
+    log_dir = './log/'
+    summary_iter = 200
 
-        degree = 10
-        val_size = 1000
-        test_size = 8400
+    degree = 10
+    val_size = 1000
+    test_size = 8400
 
-        vgg_npy_path = './vgg16.npy'
 
+vgg_npy_path = './vgg16.npy'
 global_step = tf.get_variable('global_step', initializer=0, 
                         dtype=tf.int32, trainable=False)
-data_dict = np.load(config.vgg_npy_path, encoding='latin1').item()
+data_dict = np.load(vgg_npy_path, encoding='latin1').item()
 wl = 5e-4
 
 def print_tensor(tensor):
         print tensor.op.name, ' ', tensor.get_shape().as_list()
+
+def _activation_summary(tensor):
+        name = tensor.op.name
+        tf.summary.histogram(name + '/activatins', tensor)
+        tf.summary.scalar(name + '/sparsity', tf.nn.zero_fraction(tensor))
 
 def inference(images, keep_prob):
     conv1_1 = conv_layer(images, 64, 'conv1_1')
