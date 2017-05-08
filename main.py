@@ -12,11 +12,10 @@ import math
 
 
 class Config():
-    def __init__(self):
-        batch_size = 32
-        max_step = 10000
+    batch_size = 32
+    max_step = 10000
 
-        img_width = 224
+    img_width = 224
         img_height = 224
         img_channel = 3
 
@@ -44,7 +43,7 @@ def print_tensor(tensor):
         print tensor.op.name, ' ', tensor.get_shape().as_list()
 
 def inference(images, keep_prob):
-    conv1_1 = conv_layer(image_holder, 64, 'conv1_1')
+    conv1_1 = conv_layer(images, 64, 'conv1_1')
     conv1_2 = conv_layer(conv1_1, 64, 'conv1_2')
     pool1 = tf.nn.max_pool(conv1_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
     print pool1
@@ -315,8 +314,7 @@ def main():
                 print 'precision @ 1 = %.3f' % precision
             
 	    if step%10 == 0:
-		    #print global_step.eval()
-            print 'step %d, loss = %.3f' % (step, loss_value)
+                print 'step %d, loss = %.3f' % (step, loss_value)
 
 
         #testing
