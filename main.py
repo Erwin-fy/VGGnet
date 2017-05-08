@@ -22,7 +22,7 @@ class Config():
     steps = '-1'
     param_dir = './params/'
     save_filename = 'modeler'
-    load_filename = 'modeler-' + config.steps
+    load_filename = 'modeler-' + steps
     checkpointer_iter = 2000
 
     log_dir = './log/'
@@ -32,12 +32,19 @@ class Config():
     val_size = 1000
     test_size = 8400
 
-
+batch_size = 32
 vgg_npy_path = './vgg16.npy'
 global_step = tf.get_variable('global_step', initializer=0, 
                         dtype=tf.int32, trainable=False)
 data_dict = np.load(vgg_npy_path, encoding='latin1').item()
 wl = 5e-4
+start_learning_rate = 1e-5
+decay_rate = 0.99
+decay_steps = 200
+
+image_holder = tf.placeholder(tf.float32, [32, 224, 224, 3])
+label_holder = tf.placeholder(tf.int32, [32])
+keep_prob = tf.placeholder(tf.float32)
 
 def print_tensor(tensor):
         print tensor.op.name, ' ', tensor.get_shape().as_list()
@@ -236,9 +243,6 @@ def _summary_reshape(fweight, shape, num_new):
 
 def main():
     config = Config()
-    image_holder = tf.placeholder(tf.float32, [config.batch_size, config.img_width, config.img_height, config.img_channel])
-    label_holder = tf.placeholder(tf.int32, [config.batch_size])
-    keep_prob = tf.placeholder(tf.float32)
     
     # read data to train("data/train")
     train_reader = read_data.VGGReader("./labels/train_labels.txt", "./data/images", config)
@@ -251,7 +255,7 @@ def main():
     train_op = train_op(loss)
 
     #predictions = tf.nn.softmax(logits)
-    top_k_op = top_k_op(logits)
+    top_k_op = tf.nn.in_top_k(logits, label_holder, 1)
 
     init = tf.global_variables_initializer()
     saver = tf.train.Saver(max_to_keep=100)
