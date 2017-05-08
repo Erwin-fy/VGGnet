@@ -66,6 +66,7 @@ def main():
         logdir = os.path.join(config.log_dir, datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
         train_writer = tf.summary.FileWriter(logdir, sess.graph)
 
+        '''
         #start training
         print 'start training'
         for step in range(config.max_step):
@@ -125,7 +126,8 @@ def main():
 		#print modeler.global_step.eval()
                 print 'step %d, loss = %.3f' % (step, loss_value)
 
-
+    '''
+    
         #testing
 	true_count = 0
 	num_iter = int(math.ceil(config.test_size / config.batch_size))

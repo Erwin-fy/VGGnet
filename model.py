@@ -46,6 +46,48 @@ class VGG():
         tf.summary.histogram(name + '/activatins', tensor)
         tf.summary.scalar(name + '/sparsity', tf.nn.zero_fraction(tensor))
 
+    def inference(self):
+        conv1_1 = self.conv_layer(self.image_holder, 64, 'conv1_1')
+        conv1_2 = self.conv_layer(conv1_1, 64, 'conv1_2')
+        pool1 = tf.nn.max_pool(conv1_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
+        print pool1
+
+        conv2_1 = self.conv_layer(pool1, 128, 'conv2_1')
+        conv2_2 = self.conv_layer(conv2_1, 128, 'conv2_2')
+        pool2 = tf.nn.max_pool(conv2_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
+
+        conv3_1 = self.conv_layer(pool2, 256, 'conv3_1')
+        conv3_2 = self.conv_layer(conv3_1, 256, 'conv3_2')
+        conv3_3 = self.conv_layer(conv3_2, 256, 'conv3_3')
+        pool3 = tf.nn.max_pool(conv3_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
+        
+        conv4_1 = self.conv_layer(pool3, 512, 'conv4_1')
+        conv4_2 = self.conv_layer(conv4_1, 512, 'conv4_2')
+        conv4_3 = self.conv_layer(conv4_2, 512, 'conv4_3')
+        pool4 = tf.nn.max_pool(conv4_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
+
+        conv5_1 = self.conv_layer(pool4, 512, 'conv5_1')
+        conv5_2 = self.conv_layer(conv5_1, 512, 'conv5_2')
+        conv5_3 = self.conv_layer(conv5_2, 512, 'conv5_3')
+        pool5 = tf.nn.max_pool(conv5_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
+        self.print_tensor(pool5)
+
+        '''
+        fc6 = self.fc_layer(pool5, 4096, 'fc6')
+        drop1 = tf.nn.dropout(fc6, self.keep_prob)
+        fc7 = self.fc_layer(drop1, 4096, 'fc7')
+        drop2 = tf.nn.dropout(fc7, self.keep_prob)
+        logits = self.final_fc_layer(drop2, 20, 'fc8')
+        '''
+        fc6 = self.fcn_layer(pool5, 'fc6')
+        drop1 = tf.nn.dropout(fc6, keep_prob)
+        fc7 = self.fcn_layer(drop1, 'fc7')
+        drop2 = tf.nn.dropout(fc7, keep_prob)
+
+        logits = self.fcn_layer(drop2, 'fc8', 20)
+
+        return logits
+
     def conv_layer(self, fm, channels, name):
         '''
         Arg fm: feather maps
@@ -106,51 +148,32 @@ class VGG():
             self._activation_summary(pre_activation)
 
             return pre_activation
-  
 
-    def inference(self):
-        conv1_1 = self.conv_layer(self.image_holder, 64, 'conv1_1')
-        conv1_2 = self.conv_layer(conv1_1, 64, 'conv1_2')
-        pool1 = tf.nn.max_pool(conv1_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
-        print pool1
+    def fcn_layer(self, bottom, name, num_classes=None):
+        with tf.variable_scope(name) as scope:
+            shape = bottom.get_shape().as_list()
+            if name == 'fc6':
+                kernel = self.get_fc_weight_reshape(name, [7, 7, 512, 4096])
+            elif name == 'fc7':
+                kernel = self.get_fc_weight_reshape(name, [1, 1, 4096, 4096])
+            else:
+                kernel = self.get_fc_weight_reshape(name, [1, 1, 4096, 1000], num_classes=num_classes)
 
-        conv2_1 = self.conv_layer(pool1, 128, 'conv2_1')
-        conv2_2 = self.conv_layer(conv2_1, 128, 'conv2_2')
-        pool2 = tf.nn.max_pool(conv2_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
+            conv = tf.nn.conv2d(bottom, kernel, [1, 1, 1, 1], padding='SAME')
+            biases = self.get_bias(name, num_classes=num_classes)
+            
+            pre_activation = tf.nn.bias_add(conv, biases)
+            self.print_tensor(pre_activation)
+            
+            if name == 'fc8':
+                self._activation_summary(pre_activation)
+                return pre_activation
+            else:
+                activatin = tf.nn.relu(pre_activation)
+                return activatin
 
-        conv3_1 = self.conv_layer(pool2, 256, 'conv3_1')
-        conv3_2 = self.conv_layer(conv3_1, 256, 'conv3_2')
-        conv3_3 = self.conv_layer(conv3_2, 256, 'conv3_3')
-        pool3 = tf.nn.max_pool(conv3_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
-        
-        conv4_1 = self.conv_layer(pool3, 512, 'conv4_1')
-        conv4_2 = self.conv_layer(conv4_1, 512, 'conv4_2')
-        conv4_3 = self.conv_layer(conv4_2, 512, 'conv4_3')
-        pool4 = tf.nn.max_pool(conv4_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
-
-        conv5_1 = self.conv_layer(pool4, 512, 'conv5_1')
-        conv5_2 = self.conv_layer(conv5_1, 512, 'conv5_2')
-        conv5_3 = self.conv_layer(conv5_2, 512, 'conv5_3')
-        pool5 = tf.nn.max_pool(conv5_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
-        self.print_tensor(pool5)
-
-
-        fc6 = self.fc_layer(pool5, 4096, 'fc6')
-        drop1 = tf.nn.dropout(fc6, self.keep_prob)
-
-        fc7 = self.fc_layer(drop1, 4096, 'fc7')
-        drop2 = tf.nn.dropout(fc7, self.keep_prob)
-
-        #fc8 = self.fc_layer(drop2, 1000, 'fc8')
-        #drop3 = tf.nn.dropout(fc8, self.keep_prob)
-
-        logits = self.final_fc_layer(drop2, 20, 'fc8')
-
-
-        return logits
 
     def loss(self, logits):
-        ''''
         labels = tf.cast(self.label_holder, tf.int64)
         cross_entropy_sum = tf.nn.sparse_softmax_cross_entropy_with_logits(
             logits=logits, labels=labels, name='cross_entropy_sum')
@@ -166,10 +189,10 @@ class VGG():
 
         softmax_loss_sum = -tf.log(tf.reduce_sum(tf.multiply(logits, labels), axis=1))
         softmax_loss = tf.reduce_mean(softmax_loss_sum, name='softmax_loss')
-        
+        '''
 
 
-        tf.add_to_collection('losses', softmax_loss)
+        tf.add_to_collection('losses', cross_entropy)
         total_loss = tf.add_n(tf.get_collection('losses'), name='total_loss')
 
 
@@ -203,6 +226,7 @@ class VGG():
 
         return var
 
+    '''
     def get_fc_weight(self, name):
         init = tf.constant_initializer(value=self.data_dict[name][0], dtype=tf.float32)
         shape = self.data_dict[name][0].shape
@@ -212,7 +236,6 @@ class VGG():
             weight_decay = tf.multiply(tf.nn.l2_loss(var), self.wl, name='weight_loss')
             tf.add_to_collection("losses", weight_decay)
         return var
-
 
     def get_bias(self, name):
         init = tf.constant_initializer(value=self.data_dict[name][1], dtype=tf.float32)
@@ -265,3 +288,81 @@ class VGG():
             avg_fweight[:, avg_idx] = np.mean(
                 fweight[:, start_idx:end_idx], axis=1)
         return avg_fweight
+    '''
+
+    def get_bias(self, name, num_classes=None):
+        bias_wights = self.data_dict[name][1]
+        shape = self.data_dict[name][1].shape
+        if name == 'fc8':
+            bias_wights = self._bias_reshape(bias_wights, shape[0],
+                                             num_classes)
+            shape = [num_classes]
+        init = tf.constant_initializer(value=bias_wights,
+                                       dtype=tf.float32)
+        var = tf.get_variable(name="biases", initializer=init, shape=shape)
+        _variable_summaries(var)
+        return var
+
+    def get_fc_weight(self, name):
+        init = tf.constant_initializer(value=self.data_dict[name][0],
+                                       dtype=tf.float32)
+        shape = self.data_dict[name][0].shape
+        var = tf.get_variable(name="weights", initializer=init, shape=shape)
+        if not tf.get_variable_scope().reuse:
+            weight_decay = tf.multiply(tf.nn.l2_loss(var), self.wd,
+                                       name='weight_loss')
+            tf.add_to_collection('losses',
+                                 weight_decay)
+        _variable_summaries(var)
+        return var
+
+    def _bias_reshape(self, bweight, num_orig, num_new):
+        """ Build bias weights for filter produces with `_summary_reshape`
+        """
+        n_averaged_elements = num_orig//num_new
+        avg_bweight = np.zeros(num_new)
+        for i in range(0, num_orig, n_averaged_elements):
+            start_idx = i
+            end_idx = start_idx + n_averaged_elements
+            avg_idx = start_idx//n_averaged_elements
+            if avg_idx == num_new:
+                break
+            avg_bweight[avg_idx] = np.mean(bweight[start_idx:end_idx])
+        return avg_bweight
+
+    def _summary_reshape(self, fweight, shape, num_new):
+        num_orig = shape[3]
+        shape[3] = num_new
+        assert(num_new < num_orig)
+        n_averaged_elements = num_orig//num_new
+        avg_fweight = np.zeros(shape)
+        for i in range(0, num_orig, n_averaged_elements):
+            start_idx = i
+            end_idx = start_idx + n_averaged_elements
+            avg_idx = start_idx//n_averaged_elements
+            if avg_idx == num_new:
+                break
+            avg_fweight[:, :, :, avg_idx] = np.mean(
+                fweight[:, :, :, start_idx:end_idx], axis=3)
+        return avg_fweight
+
+    def _add_wd_and_summary(self, var, wd):
+        if wd and (not tf.get_variable_scope().reuse):
+            weight_decay = tf.multiply(
+                tf.nn.l2_loss(var), wd, name='weight_loss')
+            tf.add_to_collection('losses', weight_decay)
+        _variable_summaries(var)
+        return var
+
+    def get_fc_weight_reshape(self, name, shape, num_classes=None):
+        print('Layer name: %s' % name)
+        print('Layer shape: %s' % shape)
+        weights = self.data_dict[name][0]
+        weights = weights.reshape(shape)
+        if num_classes is not None:
+            weights = self._summary_reshape(weights, shape,
+                                            num_new=num_classes)
+        init = tf.constant_initializer(value=weights,
+                                       dtype=tf.float32)
+        var = tf.get_variable(name="weights", initializer=init, shape=shape)
+        return var
