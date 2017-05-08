@@ -32,7 +32,7 @@ class VGGReader():
         #all_img_list = list()
         with open(label_path, 'rb') as fr:
             for line in fr:
-                tmp = re.split('  ', line.strip())
+                tmp = re.split(' ', line.strip())
 		#print tmp
                 if(len(tmp) != self.record_len):
                     print "Length Error: ", len(tmp)
@@ -107,16 +107,16 @@ class VGGReader():
         return out_imgs, out_begins, filename_list
     
     def generate_img(self, img):
-        scale = random.randint(256, 512)
-        img = cv2.resize(img, (scale, scale))
-        row_begin = random.randint(0, scale - self.img_height)
-        col_begin = random.randint(0, scale - self.img_width)
+        #scale = random.randint(256, 512)
+        img = cv2.resize(img, (self.img_width, self.img_height))
+        #row_begin = random.randint(0, scale - self.img_height)
+        #col_begin = random.randint(0, scale - self.img_width)
         #img_row = img[row_begin : (self.img_height + row_begin)]
         #img_row = np.reshape(img_row, [self.img_height * scale])
         #img = img_row[col_begin : (col_begin + self.img_height * self.img_width)]
         #img = np.reshape(img, [self.img_height, self.img_width])
-        return  img[row_begin: (self.img_height + row_begin), col_begin: (col_begin + self.img_width)]
-
+        #return  img[row_begin: (self.img_height + row_begin), col_begin: (col_begin + self.img_width)]
+        return img
 
     def _img_preprocess(self, imgs):
         imgs = np.subtract(imgs, self.mean)

@@ -16,14 +16,14 @@ class VGG():
         self.img_height = config.img_height
         self.img_channel = config.img_channel
 
-        self.start_learning_rate = 1e-3
+        self.start_learning_rate = 1e-6
         self.decay_rate = 0.95
         self.decay_steps = 200
 
         self.vgg_npy_path = './vgg16.npy'
         self.data_dict = np.load(self.vgg_npy_path, encoding='latin1').item()
 
-        self.wl = 5e-3
+        self.wl = 5e-4
 
         self.image_holder = tf.placeholder(tf.float32,
                                 [self.batch_size, self.img_width, self.img_height, self.img_channel])
@@ -144,12 +144,13 @@ class VGG():
         #fc8 = self.fc_layer(drop2, 1000, 'fc8')
         #drop3 = tf.nn.dropout(fc8, self.keep_prob)
 
-        logits = self.final_fc_layer(drop2, 20, 'final_fc_layer')
+        logits = self.final_fc_layer(drop2, 20, 'fc8')
 
 
         return logits
 
     def loss(self, logits):
+        ''''
         labels = tf.cast(self.label_holder, tf.int64)
         cross_entropy_sum = tf.nn.sparse_softmax_cross_entropy_with_logits(
             logits=logits, labels=labels, name='cross_entropy_sum')
@@ -165,10 +166,10 @@ class VGG():
 
         softmax_loss_sum = -tf.log(tf.reduce_sum(tf.multiply(logits, labels), axis=1))
         softmax_loss = tf.reduce_mean(softmax_loss_sum, name='softmax_loss')
-        '''
+        
 
 
-        tf.add_to_collection('losses', cross_entropy)
+        tf.add_to_collection('losses', softmax_loss)
         total_loss = tf.add_n(tf.get_collection('losses'), name='total_loss')
 
 
@@ -196,24 +197,20 @@ class VGG():
         shape = self.data_dict[name][0].shape
         var = tf.get_variable(name='kernel', shape=shape, initializer=init)
     
-        #if not tf.get_variable_scope().reuse:
-        weight_decay = tf.multiply(tf.nn.l2_loss(var), self.wl, name='weight_loss')
-        tf.add_to_collection("losses", weight_decay)
-        print name+'/kernel', shape
+        if not tf.get_variable_scope().reuse:
+            weight_decay = tf.multiply(tf.nn.l2_loss(var), self.wl, name='weight_loss')
+            tf.add_to_collection("losses", weight_decay)
 
         return var
 
     def get_fc_weight(self, name):
         init = tf.constant_initializer(value=self.data_dict[name][0], dtype=tf.float32)
         shape = self.data_dict[name][0].shape
-        print self.data_dict[name][0]
         var = tf.get_variable(name='weights', shape=shape, initializer=init)
         
-        #if not tf.get_variable_scope().reuse:
-        weight_decay = tf.multiply(tf.nn.l2_loss(var), self.wl, name='weight_loss')
-        tf.add_to_collection("losses", weight_decay)
-        #print 'l2loss'
-        print name+'/weights', shape
+        if not tf.get_variable_scope().reuse:
+            weight_decay = tf.multiply(tf.nn.l2_loss(var), self.wl, name='weight_loss')
+            tf.add_to_collection("losses", weight_decay)
         return var
 
 
@@ -221,7 +218,6 @@ class VGG():
         init = tf.constant_initializer(value=self.data_dict[name][1], dtype=tf.float32)
         shape = self.data_dict[name][1].shape
         biases = tf.get_variable(name='biases', shape=shape, initializer=init)
-        print name+'/biases', shape
         return biases
     
     def get_fc_weight_reshape(self, name, shape, num_classes=None):
@@ -232,6 +228,7 @@ class VGG():
         if num_classes is not None:
             weights = self._summary_reshape(weights, shape,
                                             num_new=num_classes)
+            print weights.shape
         init = tf.constant_initializer(value=weights,
                                        dtype=tf.float32)
         var = tf.get_variable(name="weights", initializer=init, shape=shape)
@@ -254,8 +251,8 @@ class VGG():
         return avg_biases
 
     def _summary_reshape(self, fweight, shape, num_new):
-        num_orig = shape[3]
-        shape[3] = num_new
+        num_orig = shape[1]
+        shape[1] = num_new
         assert(num_new < num_orig)
         n_averaged_elements = num_orig//num_new
         avg_fweight = np.zeros(shape)
@@ -265,6 +262,6 @@ class VGG():
             avg_idx = start_idx//n_averaged_elements
             if avg_idx == num_new:
                 break
-            avg_fweight[:, :, :, avg_idx] = np.mean(
-                fweight[:, :, :, start_idx:end_idx], axis=3)
+            avg_fweight[:, avg_idx] = np.mean(
+                fweight[:, start_idx:end_idx], axis=1)
         return avg_fweight

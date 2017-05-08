@@ -42,7 +42,7 @@ def main():
     train_reader = read_data.VGGReader("./labels/train_labels.txt", "./data/images", config)
     
     #read data to val("data/val")
-    val_reader = read_data.VGGReader("./labels/val_labels.txt", "./data/images", config)
+    val_reader = read_data.VGGReader("./labels/train_labels.txt", "./data/images", config)
 
     logits = modeler.inference()
     loss = modeler.loss(logits)
@@ -94,7 +94,7 @@ def main():
                 if (step+1)%config.summary_iter == 0:
                     summary = sess.run(merged, feed_dict=feed_dict)
                     train_writer.add_summary(summary, modeler.global_step.eval())
-            '''
+            
             #val
             if (step % 100 == 0) and step:
 	        true_count = 0
@@ -120,7 +120,7 @@ def main():
 
                 precision = 1.0*true_count / config.val_size
                 print 'precision @ 1 = %.3f' % precision
-            '''
+            
 	    if step%10 == 0:
 		#print modeler.global_step.eval()
                 print 'step %d, loss = %.3f' % (step, loss_value)
