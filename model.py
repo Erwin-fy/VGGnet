@@ -46,7 +46,7 @@ class VGG():
         tf.summary.histogram(name + '/activatins', tensor)
         tf.summary.scalar(name + '/sparsity', tf.nn.zero_fraction(tensor))
 
-    def inference(self):
+    def inference(self, is_train):
         conv1_1 = self.conv_layer(self.image_holder, 64, 'conv1_1')
         conv1_2 = self.conv_layer(conv1_1, 64, 'conv1_2')
         pool1 = tf.nn.max_pool(conv1_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
@@ -72,31 +72,27 @@ class VGG():
         pool5 = tf.nn.max_pool(conv5_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
         self.print_tensor(pool5)
 
-        '''
-        fc6 = self.fc_layer(pool5, 4096, 'fc6')
-        drop1 = tf.nn.dropout(fc6, self.keep_prob)
-        fc7 = self.fc_layer(drop1, 4096, 'fc7')
-        drop2 = tf.nn.dropout(fc7, self.keep_prob)
-        logits = self.final_fc_layer(drop2, 20, 'fc8')
-        '''
-        fc6 = self.fcn_layer(pool5, 'fc6')
-        drop1 = tf.nn.dropout(fc6, keep_prob)
-        fc7 = self.fcn_layer(drop1, 'fc7')
-        drop2 = tf.nn.dropout(fc7, keep_prob)
+        fc6 = self.fc_layer(pool5, 4096, 'fc6', is_train)
+        if is_train:
+            fc6 = tf.nn.dropout(fc6, 0.5)
 
-        logits = self.fcn_layer(drop2, 'fc8', 20)
+        fc7 = self.fc_layer(fc6, 4096, 'fc7', is_train)
+        if is_train:
+            fc7 = tf.nn.dropout(fc7, 0.5)
 
-        return logits
+        logits = self.final_fc_layer(fc7, 20, 'fc8', is_train)
+
+        if is_train:
+            return logits
+        else:
+            return tf.reduce_mean(logits, axis=[1, 2])
+
 
     def conv_layer(self, fm, channels, name):
         '''
         Arg fm: feather maps
         '''
         with tf.variable_scope(name) as scope:
-            #shape = fm.get_shape()
-            #kernel = self.variable_with_weight_loss(shape=[3, 3, shape[-1].value, channels], stddev=1e-2, wl=0.0)
-            #kernel = tf.get_variable(scope + 'kernel', shape=[3, 3, shape[-1].value, channels], 
-            #    dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer_conv2d())
             kernel = self.get_conv_kernel(name)
             biases = self.get_bias(name)
             conv = tf.nn.conv2d(fm, kernel, [1, 1, 1, 1], padding='SAME')
@@ -109,7 +105,7 @@ class VGG():
 
             return activation
 
-    def fc_layer(self, input_op, fan_out, name):
+    def fc_layer(self, input_op, fan_out, name, is_train):
         '''
         input_op: 输入tensor
         fan_in: 输入节点数
@@ -117,60 +113,46 @@ class VGG():
         is_train: True --- fc   Flase --- conv
         '''
         with tf.variable_scope(name) as scope:
-            reshape = tf.reshape(input_op, [self.batch_size, -1])
-            #fan_in = reshape.get_shape()[1].value
-            #weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=0.004)
-            #weights = tf.get_variable(scope + 'weights', shape=[fan_in, fan_out], 
-            #    dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
-            #biases = tf.Variable(tf.constant(0.1, dtype=tf.float32, shape=[fan_out]))
-            
             weights = self.get_fc_weight(name)
             biases = self.get_bias(name)
-            pre_activation = tf.nn.bias_add(tf.matmul(reshape, weights), biases)
-            activation = tf.nn.relu(pre_activation)
+            
+            if is_train:
+                reshape = tf.reshape(input_op, [self.batch_size, -1])
+                pre_activation = tf.nn.bias_add(tf.matmul(reshape, weights), biases)
+            else:
+                if name == 'fc6':
+                    kernels_reshape = tf.reshape(weights, [7, 7, 512, 4096])
+                else:
+                    kernels_reshape = tf.reshape(weights, [1, 1, 4096, 4096])
 
+                conv = tf.nn.conv2d(input_op, kernels_reshape, [1, 1, 1, 1], padding='VALID')
+                pre_activation = tf.nn.bias_add(conv, biases)
+
+            activation = tf.nn.relu(pre_activation)
             self.print_tensor(activation)
             self._activation_summary(activation)
             return activation
 
-    def final_fc_layer(self, input_op, fan_out, name):
+    def final_fc_layer(self, input_op, fan_out, name, is_train):
         with tf.variable_scope(name) as scope:
-            fan_in = input_op.get_shape()[1].value            
-            #weights = self.get_fc_weight(name)
-            #weights = self.variable_with_weight_loss(shape=[fan_in, fan_out], stddev=1e-2, wl=self.wl)
-            
+
+            fan_in = input_op.get_shape()[1].value
             weights = self.get_fc_weight_reshape(name, [fan_in, 1000], num_classes=20)
             biases = self.get_bias_reshape(name, num_new=20)
 
-            pre_activation = tf.nn.bias_add(tf.matmul(input_op, weights), biases)
+            if is_train:
+                pre_activation = tf.nn.bias_add(tf.matmul(input_op, weights), biases)
+            else:
+                kernels_reshape = tf.reshape(weights, [1, 1, 4096, 20])
+                conv = tf.nn.conv2d(input_op, kernels_reshape, [1, 1, 1, 1], padding='VALID')
+                pre_activation = tf.nn.bias_add(conv, biases)
 
             self.print_tensor(pre_activation)
             self._activation_summary(pre_activation)
 
             return pre_activation
 
-    def fcn_layer(self, bottom, name, num_classes=None):
-        with tf.variable_scope(name) as scope:
-            shape = bottom.get_shape().as_list()
-            if name == 'fc6':
-                kernel = self.get_fc_weight_reshape(name, [7, 7, 512, 4096])
-            elif name == 'fc7':
-                kernel = self.get_fc_weight_reshape(name, [1, 1, 4096, 4096])
-            else:
-                kernel = self.get_fc_weight_reshape(name, [1, 1, 4096, 1000], num_classes=num_classes)
-
-            conv = tf.nn.conv2d(bottom, kernel, [1, 1, 1, 1], padding='SAME')
-            biases = self.get_bias(name, num_classes=num_classes)
-            
-            pre_activation = tf.nn.bias_add(conv, biases)
-            self.print_tensor(pre_activation)
-            
-            if name == 'fc8':
-                self._activation_summary(pre_activation)
-                return pre_activation
-            else:
-                activatin = tf.nn.relu(pre_activation)
-                return activatin
+   
 
 
     def loss(self, logits):
@@ -178,19 +160,6 @@ class VGG():
         cross_entropy_sum = tf.nn.sparse_softmax_cross_entropy_with_logits(
             logits=logits, labels=labels, name='cross_entropy_sum')
         cross_entropy = tf.reduce_mean(cross_entropy_sum, name='cross_entropy')
-       
-        '''
-        #softmax loss
-        logits = tf.nn.softmax(logits) + 1e-4
-        labels = tf.one_hot(self.label_holder, 20)
-        labels = tf.cast(labels, tf.float32)
-        
-        #self.print_tensor(tf.multiply(logits, labels))
-
-        softmax_loss_sum = -tf.log(tf.reduce_sum(tf.multiply(logits, labels), axis=1))
-        softmax_loss = tf.reduce_mean(softmax_loss_sum, name='softmax_loss')
-        '''
-
 
         tf.add_to_collection('losses', cross_entropy)
         total_loss = tf.add_n(tf.get_collection('losses'), name='total_loss')
@@ -207,10 +176,6 @@ class VGG():
         
         return train_op
 
-    def predictions(self, logits): 
-        return tf.nn.softmax(logits)
-
-
     def top_k_op(self, logits):
         return tf.nn.in_top_k(logits, self.label_holder, 1)
 
@@ -223,10 +188,9 @@ class VGG():
         if not tf.get_variable_scope().reuse:
             weight_decay = tf.multiply(tf.nn.l2_loss(var), self.wl, name='weight_loss')
             tf.add_to_collection("losses", weight_decay)
-
         return var
 
-    '''
+
     def get_fc_weight(self, name):
         init = tf.constant_initializer(value=self.data_dict[name][0], dtype=tf.float32)
         shape = self.data_dict[name][0].shape
@@ -288,8 +252,8 @@ class VGG():
             avg_fweight[:, avg_idx] = np.mean(
                 fweight[:, start_idx:end_idx], axis=1)
         return avg_fweight
-    '''
 
+    '''
     def get_bias(self, name, num_classes=None):
         bias_wights = self.data_dict[name][1]
         shape = self.data_dict[name][1].shape
@@ -366,3 +330,4 @@ class VGG():
                                        dtype=tf.float32)
         var = tf.get_variable(name="weights", initializer=init, shape=shape)
         return var
+    '''
