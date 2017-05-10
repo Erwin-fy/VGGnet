@@ -63,9 +63,7 @@ class VGGReader():
         for filename in filename_list:
             img = cv2.imread(os.path.join(self.data_path, filename),
                     self.color_mode)
-            #img = cv2.resize(img, (self.img_width, self.img_height))
-            img = self.generate_img(img)
-            
+            img = self._random_generate_img(img)
             img_list.append(img)
             #print filename
         #print np.stack(img_list)
@@ -99,8 +97,7 @@ class VGGReader():
         for filename in filename_list:
             img = cv2.imread(os.path.join(self.data_path, filename),
                     self.color_mode)
-            img = self.generate_img(img)
-            #img = cv2.resize(img, (self.img_height, self.img_width))
+            img = self._generate_img(img)
             img_list.append(img)
 
         out_imgs = self._img_preprocess(np.stack(img_list))
@@ -108,17 +105,16 @@ class VGGReader():
         #out_begins = np.int32(out_begins)
         return out_imgs, out_begins, filename_list
     
-    def generate_img(self, img):
+    def _random_generate_img(self, img):
         scale = random.randint(256, 512)
         img = cv2.resize(img, (scale, scale))
         row_begin = random.randint(0, scale - self.img_height)
         col_begin = random.randint(0, scale - self.img_width)
-        #img_row = img[row_begin : (self.img_height + row_begin)]
-        #img_row = np.reshape(img_row, [self.img_height * scale])
-        #img = img_row[col_begin : (col_begin + self.img_height * self.img_width)]
-        #img = np.reshape(img, [self.img_height, self.img_width])
         return  img[row_begin: (self.img_height + row_begin), col_begin: (col_begin + self.img_width)]
-        #return img
+    
+    def _generate_img(self, img):
+        img = cv2.resize(img, (self.img_height, self.img_width))
+        return img 
 
     def _img_preprocess(self, imgs):
         imgs = np.subtract(imgs, self.mean)
@@ -202,7 +198,7 @@ class VGGReader():
 
         return (imgs.reshape([self.batch_size, self.img_height, self.img_width, self.img_channel]), begins, filename_list)
 
-    def get_batch(self, distort=True, line_idx=None):
+    def get_batch(self, distort=False, line_idx=None):
 
         imgs, begins, filename_list = self.batch(
                 line_idx=line_idx)

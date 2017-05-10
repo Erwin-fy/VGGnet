@@ -19,7 +19,7 @@ class Config():
     img_height = 224
     img_channel = 3
 
-    steps = '-1'
+    steps = '10000'
     param_dir = './params/'
     save_filename = 'modeler'
     load_filename = 'modeler-' + steps
@@ -42,7 +42,8 @@ def main():
 
     logits = modeler.inference(False)
 
-    top_k_op = modeler.top_k_op(logits)
+    top_k_1 = modeler.top_k_op(logits, 1)
+    top_k_5 = modeler.top_k_op(logits, 5)
 
     init = tf.global_variables_initializer()
     saver = tf.train.Saver(max_to_keep=100)
@@ -57,22 +58,26 @@ def main():
         print 'restore params' + config.steps
 
         #testing
-        true_count = 0
+        true_count1 = 0
+        true_count5 = 0
         num_iter = int(math.ceil(config.test_size / config.batch_size))
         for i in range(num_iter):  
             with tf.device('/cpu:0'):
                 images_val, labels_val, val_filenames = val_reader.get_batch(False)
 
             with tf.device("/gpu:0"):
-                accuracy = sess.run([top_k_op], feed_dict={
+                accuracy1, accuracy5 = sess.run([top_k_1, top_k_5], feed_dict={
                     modeler.image_holder:images_val,
                     modeler.label_holder:labels_val
                 })
 
-            true_count += np.sum(accuracy)
+            true_count1 += np.sum(accuracy1)
+            true_count5 += np.sum(accuracy5)
 
-        precision = 1.0*true_count / config.test_size
-        print 'precision of testing @ 1 = %.3f' % precision
+        precision1 = 1.0*true_count1 / config.test_size
+        precision5 = 1.0*true_count5 / config.test_size
+        print 'precision of testing @ 1 = %.3f' % precision1
+        print 'precision of testing @ 5 = %.3f' % precision5
 
 if __name__ == '__main__':
     main()

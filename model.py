@@ -16,9 +16,9 @@ class VGG():
         self.img_height = config.img_height
         self.img_channel = config.img_channel
 
-        self.start_learning_rate = 1e-6
+        self.start_learning_rate = 1e-2
         self.decay_rate = 0.95
-        self.decay_steps = 200
+        self.decay_steps = 100
 
         self.vgg_npy_path = './vgg16.npy'
         self.data_dict = np.load(self.vgg_npy_path, encoding='latin1').item()
@@ -26,7 +26,7 @@ class VGG():
         self.wl = 5e-4
 
         self.image_holder = tf.placeholder(tf.float32,
-                                [self.batch_size, self.img_width, self.img_height, self.img_channel])
+                                [self.batch_size, self.img_height, self.img_width, self.img_channel])
         self.label_holder = tf.placeholder(tf.int32, [self.batch_size])
         self.keep_prob = tf.placeholder(tf.float32)
 
@@ -135,9 +135,7 @@ class VGG():
 
     def final_fc_layer(self, input_op, fan_out, name, is_train):
         with tf.variable_scope(name) as scope:
-
-            fan_in = input_op.get_shape()[1].value
-            weights = self.get_fc_weight_reshape(name, [fan_in, 1000], num_classes=20)
+            weights = self.get_fc_weight_reshape(name, [4096, 1000], num_classes=20)
             biases = self.get_bias_reshape(name, num_new=20)
 
             if is_train:
@@ -176,8 +174,8 @@ class VGG():
         
         return train_op
 
-    def top_k_op(self, logits):
-        return tf.nn.in_top_k(logits, self.label_holder, 1)
+    def top_k_op(self, logits, index):
+        return tf.nn.in_top_k(logits, self.label_holder, index)
 
 
     def get_conv_kernel(self, name):
