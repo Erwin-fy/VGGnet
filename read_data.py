@@ -107,12 +107,14 @@ class VGGReader():
     
     def _random_generate_img(self, img):
         scale = random.randint(256, 512)
+        #print "The random scale: ", scale
         img = cv2.resize(img, (scale, scale))
         row_begin = random.randint(0, scale - self.img_height)
         col_begin = random.randint(0, scale - self.img_width)
         return  img[row_begin: (self.img_height + row_begin), col_begin: (col_begin + self.img_width)]
     
     def _generate_img(self, img):
+        #img = cv2.resize(img, (384, 384))
         img = cv2.resize(img, (self.img_height, self.img_width))
         return img 
 
@@ -194,7 +196,7 @@ class VGGReader():
         imgs, begins, filename_list = self.random_batch()
         if distort:
             imgs = self._random_flip_lr(imgs)
-            imgs = self._random_roate(imgs, self.degree)
+            #imgs = self._random_roate(imgs, self.degree)
 
         return (imgs.reshape([self.batch_size, self.img_height, self.img_width, self.img_channel]), begins, filename_list)
 
@@ -204,7 +206,7 @@ class VGGReader():
                 line_idx=line_idx)
         if distort:
             imgs = self._batch_random_flip_lr(imgs)
-            imgs = self._batch_random_roate(imgs, self.degree)
+            #imgs = self._batch_random_roate(imgs, self.degree)
 
         return (imgs.reshape([self.batch_size, self.img_height, self.img_width, self.img_channel]), begins, filename_list)
 

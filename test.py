@@ -12,14 +12,14 @@ import math
 
 
 class Config():
-    batch_size = 32
-    max_step = 10000
+    batch_size = 16
+    max_step = 6000
 
-    img_width = 224
-    img_height = 224
+    img_width = 384
+    img_height = 384
     img_channel = 3
 
-    steps = '10000'
+    steps = '4000'
     param_dir = './params/'
     save_filename = 'modeler'
     load_filename = 'modeler-' + steps
@@ -29,8 +29,7 @@ class Config():
     summary_iter = 200
 
     degree = 10
-    val_size = 32
-    test_size = 3300
+    test_size = 3837
 
 def main():
     config = Config()
@@ -38,7 +37,7 @@ def main():
     modeler = model.VGG(config)
 
     #read data to val("data/val")
-    val_reader = read_data.VGGReader("./labels/clear_val_labels.txt", "./data/images", config)
+    val_reader = read_data.VGGReader("./labels/val_labels.txt", "./data/images", config)
 
     logits = modeler.inference(False)
 

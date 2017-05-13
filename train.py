@@ -13,7 +13,7 @@ import math
 
 class Config():
     batch_size = 32
-    max_step = 10000
+    max_step = 100000
 
     img_width = 224
     img_height = 224
@@ -30,7 +30,6 @@ class Config():
 
     degree = 10
     val_size = 32
-    test_size = 8400
 
 def main():
     config = Config()
@@ -38,7 +37,7 @@ def main():
     modeler = model.VGG(config)
 
     # read data to train("data/train")
-    train_reader = read_data.VGGReader("./labels/clear_train_labels.txt", "./data/images", config)
+    train_reader = read_data.VGGReader("./labels/new_train_labels.txt", "./data/images", config)
 
     logits = modeler.inference(True)
     loss = modeler.loss(logits)
@@ -56,7 +55,9 @@ def main():
 
     with tf.Session(config=sess_config) as sess:
         sess.run(init)
-        
+        #saver.restore(sess, config.param_dir + config.load_filename)
+        #print "restore params" + config.steps
+
         merged = tf.summary.merge_all()
         logdir = os.path.join(config.log_dir, datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
         train_writer = tf.summary.FileWriter(logdir, sess.graph)
@@ -67,7 +68,7 @@ def main():
             #start_time = time.time()
 
             with tf.device('/cpu:0'):
-                images_train, labels_train, train_filenames = train_reader.get_random_batch(False)
+                images_train, labels_train, train_filenames = train_reader.get_random_batch()
 
             feed_dict = {
                 modeler.image_holder:images_train,
