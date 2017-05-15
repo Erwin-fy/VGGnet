@@ -7,13 +7,13 @@ import time
 import numpy as np
 import tensorflow as tf
 import model
-import read_data
+import read_data_new
 import math
 
 
 class Config():
-    batch_size = 32
-    max_step = 100000
+    batch_size = 20
+    max_step = 10000
 
     img_width = 224
     img_height = 224
@@ -21,9 +21,10 @@ class Config():
 
     steps = '-1'
     param_dir = './params/'
-    save_filename = 'modeler'
-    load_filename = 'modeler-' + steps
-    checkpointer_iter = 2000
+    save_filename = 'vgg16-'
+    checkpointer_iter = 200
+
+    vgg_path = './vgg16.npy'
 
     log_dir = './log/'
     summary_iter = 200
@@ -31,20 +32,21 @@ class Config():
     degree = 10
     val_size = 32
 
+    trainset_file = './labels/train_image.txt'
+    imgs_path = './data/images/'
+    labels_file = './labels/train_labels.txt'
+
 def main():
     config = Config()
 
     modeler = model.VGG(config)
 
     # read data to train("data/train")
-    train_reader = read_data.VGGReader("./labels/new_train_labels.txt", "./data/images", config)
+    train_reader = read_data_new.Reader(config)
 
-    logits = modeler.inference(True)
-    loss = modeler.loss(logits)
-    train_op = modeler.train_op(loss)
-
-    predictions = tf.argmax(tf.nn.softmax(logits), 1)
-
+    modeler.inference()
+    loss = modeler.loss
+    train_op = modeler.train_op
 
     init = tf.global_variables_initializer()
     saver = tf.train.Saver(max_to_keep=100)
@@ -68,19 +70,20 @@ def main():
             #start_time = time.time()
 
             with tf.device('/cpu:0'):
-                images_train, labels_train, train_filenames = train_reader.get_random_batch()
+                images_train, labels_train = train_reader.random_batch()
 
             feed_dict = {
                 modeler.image_holder:images_train,
-                modeler.label_holder:labels_train
+                modeler.label_holder:labels_train,
+                modeler.is_train:True
             }
 
             with tf.device('/gpu:0'):
-                _, loss_value, prediction = sess.run([train_op, loss, predictions], feed_dict=feed_dict)
+                _, loss_value = sess.run([train_op, loss], feed_dict=feed_dict)
 
             with tf.device('/cpu:0'):
                 if (step+1)%config.checkpointer_iter == 0:
-                    saver.save(sess, config.param_dir+config.save_filename, modeler.global_step.eval())
+                    modeler.save_npy(sess, config.param_dir + config.save_filename + str(modeler.global_step.eval()) + '.npy')
                     
                 if (step+1)%config.summary_iter == 0:
                     summary = sess.run(merged, feed_dict=feed_dict)
@@ -88,8 +91,8 @@ def main():
             
             if step%10 == 0:
                 print 'step %d, loss = %.3f' % (step, loss_value)
-                print prediction
-                print labels_train
+                #print prediction
+                #print labels_train
 
 if __name__ == '__main__':
     main()

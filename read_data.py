@@ -21,9 +21,9 @@ class VGGReader():
         #self.label_path = label_path
         self.img_channel = config.img_channel
         self.degree = config.degree
-        self.record_len = 2
+        self.record_len = 21
 	self.line_idx = 0
-        self.mean = [101.9337, 110.3372, 116.2642] 
+        self.mean = [123.68, 116.779, 103.939] 
         if (self.img_channel == 3) :
             self.color_mode = 1
         else:
@@ -38,7 +38,14 @@ class VGGReader():
                     print "Length Error: ", len(tmp)
                     sys.exit(0)
                 filename = tmp[0]
-                begin = int(float(tmp[1]))
+                #begin = int(float(tmp[1]))
+                begin = []
+                #filename = tmp[0] + ".jpg"
+                for i in range(1, 21):
+                    begin.append(float(tmp[i]))
+                #print begin
+
+
                 self.records.append((filename, begin))
         self.size = len(self.records)
                 
@@ -65,12 +72,8 @@ class VGGReader():
                     self.color_mode)
             img = self._random_generate_img(img)
             img_list.append(img)
-            #print filename
-        #print np.stack(img_list)
         out_imgs = self._img_preprocess(np.stack(img_list))
         out_begins = np.stack(begins_list)
-        #out_begins = np.int32(out_begins)
-        #print self.label_path, out_begins
         return out_imgs, out_begins, filename_list
 
 
@@ -106,13 +109,16 @@ class VGGReader():
         return out_imgs, out_begins, filename_list
     
     def _random_generate_img(self, img):
+        '''
         scale = random.randint(256, 512)
-        #print "The random scale: ", scale
         img = cv2.resize(img, (scale, scale))
         row_begin = random.randint(0, scale - self.img_height)
         col_begin = random.randint(0, scale - self.img_width)
         return  img[row_begin: (self.img_height + row_begin), col_begin: (col_begin + self.img_width)]
-    
+        '''
+        return cv2.resize(img, (self.img_height, self.img_width))
+
+
     def _generate_img(self, img):
         #img = cv2.resize(img, (384, 384))
         img = cv2.resize(img, (self.img_height, self.img_width))
