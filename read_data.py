@@ -11,14 +11,14 @@ import math
 
 class VGGReader():
 
-    def __init__(self, label_path, data_path, config):
+    def __init__(self, config):
         self.records = list()
         self.batch_size = config.batch_size
-        self.data_path = data_path
+        self.data_path = config.data_path
 
         self.img_width = config.img_width
         self.img_height = config.img_height
-        #self.label_path = label_path
+        self.label_path = config.label_path
         self.img_channel = config.img_channel
         self.degree = config.degree
         self.record_len = 21
@@ -30,7 +30,7 @@ class VGGReader():
             self.color_mode = 0
         
         #all_img_list = list()
-        with open(label_path, 'rb') as fr:
+        with open(self.label_path, 'rb') as fr:
             for line in fr:
                 tmp = re.split(' ', line.strip())
 		#print tmp
@@ -109,15 +109,12 @@ class VGGReader():
         return out_imgs, out_begins, filename_list
     
     def _random_generate_img(self, img):
-        '''
         scale = random.randint(256, 512)
         img = cv2.resize(img, (scale, scale))
         row_begin = random.randint(0, scale - self.img_height)
         col_begin = random.randint(0, scale - self.img_width)
         return  img[row_begin: (self.img_height + row_begin), col_begin: (col_begin + self.img_width)]
-        '''
-        return cv2.resize(img, (self.img_height, self.img_width))
-
+        
 
     def _generate_img(self, img):
         #img = cv2.resize(img, (384, 384))

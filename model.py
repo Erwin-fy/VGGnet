@@ -18,7 +18,7 @@ class VGG():
         self.img_height = config.img_height
         self.img_channel = config.img_channel
 
-        self.start_learning_rate = 1e-4
+        self.start_learning_rate = 1e-3
         self.decay_rate = 0.99
         self.decay_steps = 100
 
@@ -38,8 +38,8 @@ class VGG():
     def print_tensor(self, tensor):
         print tensor.op.name, ' ', tensor.get_shape().as_list()
 
-    def variable_with_weight_loss(self, shape, stddev, wl):
-        var = tf.Variable(tf.truncated_normal(shape, dtype=tf.float32, stddev=stddev))
+    def variable_with_weight_loss(self, shape, stddev, wl, name):
+        var = tf.Variable(tf.truncated_normal(shape, dtype=tf.float32, stddev=stddev), name=name)
         if wl is not None:
             weight_loss = tf.multiply(tf.nn.l2_loss(var), wl, name='weight_loss')
             tf.add_to_collection('losses', weight_loss)
@@ -51,17 +51,7 @@ class VGG():
         tf.summary.scalar(name + '/sparsity', tf.nn.zero_fraction(tensor))
 
     def inference(self):
-        images = self.image_holder * 255.0
-        red, green, blue = tf.split(axis=3, num_or_size_splits=3, value=images)
-        assert red.get_shape().as_list()[1:] == [224, 224, 1]
-        assert green.get_shape().as_list()[1:] == [224, 224, 1]
-        assert blue.get_shape().as_list()[1:] == [224, 224, 1]
-        bgr = tf.concat(axis=3, values=[red - VGG_MEAN[0], 
-                                       green - VGG_MEAN[1],
-                                       blue - VGG_MEAN[2]])
-        assert bgr.get_shape().as_list()[1:] == [224, 224, 3]
-
-        self.conv1_1 = self.conv_layer(bgr, 64, 'conv1_1')
+        self.conv1_1 = self.conv_layer(self.image_holder, 64, 'conv1_1')
         self.conv1_2 = self.conv_layer(self.conv1_1, 64, 'conv1_2')
         self.pool1 = tf.nn.max_pool(self.conv1_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool1')
 
@@ -93,26 +83,27 @@ class VGG():
         if self.is_train is not None:
             self.fc7 = tf.cond(self.is_train, lambda: tf.nn.dropout(self.fc7, 0.5), lambda: self.fc7)
 
-        self.fc8 = self.fc_layer(self.fc7, 1000, 'fc8')
+        #self.fc8 = self.fc_layer(self.fc7, 1000, 'fc8')
 
-        self.fc9 = self.final_fc_layer(self.fc8, 20, 'fc9')
+        self.fc8 = self.final_fc_layer(self.fc7, 20, 'fc8')
         
         '''
         if not is_train:
             self.logits =tf.reduce_mean(self.logits, axis=[1, 2])
         '''
 
-        self.prob = tf.nn.softmax(self.fc9, name='prob')
+        self.prob = tf.nn.softmax(self.fc8, name='prob')
 
-        self.loss = self.loss()
-        self.train_op = self.train_op()
+        self.pred = tf.argmax(self.prob, 1)
+
+        self.loss = self.loss('loss')
 
 
     def conv_layer(self, fm, channels, name):
         '''
         Arg fm: feather maps
         '''
-        with tf.variable_scope(name):
+        with tf.name_scope(name) as scope:
             kernel = self.get_conv_kernel(name)
             biases = self.get_bias(name)
             conv = tf.nn.conv2d(fm, kernel, [1, 1, 1, 1], padding='SAME')
@@ -132,7 +123,7 @@ class VGG():
         fan_out： 输出节点数
         is_train: True --- fc   Flase --- conv
         '''
-        with tf.variable_scope(name):
+        with tf.name_scope(name) as scope:
             weights = self.get_fc_weight(name)
             biases = self.get_bias(name)
             
@@ -150,30 +141,31 @@ class VGG():
 
                 conv = tf.nn.conv2d(input_op, kernels_reshape, [1, 1, 1, 1], padding='VALID')
                 pre_activation = tf.nn.bias_add(conv, biases)
-            '''
+            
             if name == 'fc8':
                 activation = pre_activation
             else:
                 activation = tf.nn.relu(pre_activation)
-            
+            '''
+            activation = tf.nn.relu(pre_activation)
+
             self.print_tensor(activation)
             self._activation_summary(activation)
             return activation
 
     def final_fc_layer(self, input_op, fan_out, name):
-        with tf.variable_scope(name):
-            #weights = self.get_fc_weight_reshape(name, [4096, 1000], num_classes=20)
-            #biases = self.get_bias_reshape(name, num_new=20)
+        with tf.name_scope(name) as scope:
+            weights = self.get_fc_weight_reshape(name, [4096, 20], num_classes=20)
+            biases = self.get_bias_reshape(name, num_new=20)
 
+            '''
             if name in self.data_dict:
                 weights = self.data_dict[name][0]
                 biases = self.data_dict[name][1]
             else:
-                weights = self.variable_with_weight_loss([1000, 20], 0.01, self.wl)
-                biases = tf.Variable(tf.constant(0.1, shape=[20], dtype=tf.float32))
-
-            self.var_dict[(name, 0)] = weights
-            self.var_dict[(name, 1)] = biases
+                weights = self.variable_with_weight_loss([1000, 20], 0.01, self.wl, name=name+'weights')
+                biases = tf.Variable(tf.constant(0.1, shape=[20], dtype=tf.float32), name=name+'biases')
+            '''
 
             pre_activation = tf.nn.bias_add(tf.matmul(input_op, weights), biases)
             '''
@@ -192,21 +184,22 @@ class VGG():
             return pre_activation
 
 
-    def loss(self):
-        #cross_entropy = tf.reduce_mean(-tf.reduce_sum(self.label_holder * tf.log(self.prob), reduction_indices=[1]))
-        cross_entropy = tf.reduce_sum((self.prob - self.label_holder) ** 2)
-        self.print_tensor(self.prob)
+    def loss(self, name):
+        with tf.name_scope(name) as scope:
+            cross_entropy = tf.reduce_mean(-tf.reduce_sum(self.label_holder * tf.log(self.prob), reduction_indices=[1]))
+            #cross_entropy = tf.reduce_sum((self.prob - self.label_holder) ** 2)
+            self.print_tensor(self.prob)
 
-        '''
-        tf.add_to_collection('losses', cross_entropy)
+            '''
+            tf.add_to_collection('losses', cross_entropy)
         
-        total_loss = tf.add_n(tf.get_collection('losses'), name='total_loss')
+            total_loss = tf.add_n(tf.get_collection('losses'), name='total_loss')
 
-        tf.summary.scalar(total_loss.op.name + ' (raw)', total_loss)
-        '''
+            tf.summary.scalar(total_loss.op.name + ' (raw)', total_loss)
+            '''
 
-        tf.summary.scalar(cross_entropy.op.name, cross_entropy)
-        return cross_entropy
+            tf.summary.scalar(cross_entropy.op.name, cross_entropy)
+            return cross_entropy
 
     def accuracy(self):
         correct_predition = tf.equal(tf.argmax(self.prob, 1), tf.argmax(self.label_holder, 1))
@@ -235,13 +228,11 @@ class VGG():
 
 
     def get_conv_kernel(self, name):
-        init = tf.constant_initializer(value=self.data_dict[name][0],dtype=tf.float32)
-        shape = self.data_dict[name][0].shape
-        var = tf.get_variable(name='kernel', shape=shape, initializer=init)
+        init = tf.constant(value=self.data_dict[name][0],dtype=tf.float32)
+        var = tf.Variable(init, name=name+'kernel', dtype=tf.float32)
     
-        if not tf.get_variable_scope().reuse:
-            weight_decay = tf.multiply(tf.nn.l2_loss(var), self.wl, name='weight_loss')
-            tf.add_to_collection("losses", weight_decay)
+        weight_decay = tf.multiply(tf.nn.l2_loss(var), self.wl, name='weight_loss')
+        tf.add_to_collection("losses", weight_decay)
 
         self.var_dict[(name, 0)] = var
 
@@ -249,34 +240,37 @@ class VGG():
 
 
     def get_fc_weight(self, name):
-        init = tf.constant_initializer(value=self.data_dict[name][0], dtype=tf.float32)
-        shape = self.data_dict[name][0].shape
-        var = tf.get_variable(name='weights', shape=shape, initializer=init)
+        init = tf.constant(value=self.data_dict[name][0], dtype=tf.float32)
+        var = tf.Variable(init, name=name+'weights', dtype=tf.float32)
         
-        if not tf.get_variable_scope().reuse:
-            weight_decay = tf.multiply(tf.nn.l2_loss(var), self.wl, name='weight_loss')
-            tf.add_to_collection("losses", weight_decay)
+        weight_decay = tf.multiply(tf.nn.l2_loss(var), self.wl, name='weight_loss')
+        tf.add_to_collection("losses", weight_decay)
 
         self.var_dict[(name, 0)] = var
 
         return var
 
     def get_bias(self, name):
-        init = tf.constant_initializer(value=self.data_dict[name][1], dtype=tf.float32)
-        shape = self.data_dict[name][1].shape
-        biases = tf.get_variable(name='biases', shape=shape, initializer=init)
+        init = tf.constant(value=self.data_dict[name][1], dtype=tf.float32)
+        var = tf.Variable(init, name=name+'biases', dtype=tf.float32)
 
-        self.var_dict[(name, 1)] = biases
+        self.var_dict[(name, 1)] = var
 
-        return biases
+        return var
     
     def get_fc_weight_reshape(self, name, shape, num_classes=None):
         print('Layer name: %s' % name)
         print('Layer shape: %s' % shape)
         weights = self.data_dict[name][0]
         weights = weights.reshape(shape)
-        #return weights[:, 0:num_classes]
+        init = weights[:, 0:num_classes]
+        var = tf.Variable(init, name=name+'weights', dtype=tf.float32)
+        
+        weight_decay = tf.multiply(tf.nn.l2_loss(var), self.wl, name='weight_loss')
+        tf.add_to_collection("losses", weight_decay)
 
+        self.var_dict[(name, 0)] = var
+        '''
         if num_classes is not None:
             weights = self._summary_reshape(weights, shape,
                                             num_new=num_classes)
@@ -284,12 +278,19 @@ class VGG():
         init = tf.constant_initializer(value=weights,
                                        dtype=tf.float32)
         var = tf.get_variable(name="weights", initializer=init, shape=shape)
+        '''
+        
         return var
 
     def get_bias_reshape(self, name, num_new):
         biases = self.data_dict[name][1]
         shape = self.data_dict[name][1].shape
-        return biases[0: num_new]
+        init = biases[0: num_new]
+        var =tf.Variable(init, name=name+'biases', dtype=tf.float32)
+
+        self.var_dict[(name, 1)] = var
+
+        return var
         
 
         num_orig = shape[0]

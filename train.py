@@ -7,24 +7,29 @@ import time
 import numpy as np
 import tensorflow as tf
 import model
-import read_data_new
+import read_data
 import math
 
 
 class Config():
-    batch_size = 20
-    max_step = 10000
+    batch_size = 32
+    max_step = 100000
 
     img_width = 224
     img_height = 224
     img_channel = 3
 
-    steps = '-1'
+    steps = '5800'
     param_dir = './params/'
     save_filename = 'vgg16-'
     checkpointer_iter = 200
 
+    #vgg_path = param_dir + save_filename + steps + '.npy'
     vgg_path = './vgg16.npy'
+
+    label_path = './labels/train_labels_new.txt'
+    data_path = './data/images/'
+
 
     log_dir = './log/'
     summary_iter = 200
@@ -32,9 +37,6 @@ class Config():
     degree = 10
     val_size = 32
 
-    trainset_file = './labels/train_image.txt'
-    imgs_path = './data/images/'
-    labels_file = './labels/train_labels.txt'
 
 def main():
     config = Config()
@@ -42,11 +44,11 @@ def main():
     modeler = model.VGG(config)
 
     # read data to train("data/train")
-    train_reader = read_data_new.Reader(config)
+    train_reader = read_data.VGGReader(config)
 
     modeler.inference()
     loss = modeler.loss
-    train_op = modeler.train_op
+    train_op = modeler.train_op(loss)
 
     init = tf.global_variables_initializer()
     saver = tf.train.Saver(max_to_keep=100)
@@ -70,7 +72,7 @@ def main():
             #start_time = time.time()
 
             with tf.device('/cpu:0'):
-                images_train, labels_train = train_reader.random_batch()
+                images_train, labels_train, filesname_train = train_reader.get_random_batch(True)
 
             feed_dict = {
                 modeler.image_holder:images_train,
